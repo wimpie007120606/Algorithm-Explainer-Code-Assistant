@@ -95,12 +95,15 @@ class VectorStoreRetriever:
     ) -> None:
         settings = get_settings()
         self._store = store or get_vector_store()
-        self._top_k = top_k or settings.default_top_k
+        self._top_k = top_k if top_k is not None else settings.default_top_k
         self._threshold = (
             similarity_threshold
             if similarity_threshold is not None
             else settings.similarity_threshold
         )
+        if self._top_k <= 0:
+            raise ValueError(f"top_k must be positive, got {self._top_k}.")
+        self._validate_threshold(self._threshold)
 
     def retrieve(
         self,
@@ -121,8 +124,16 @@ class VectorStoreRetriever:
             List of RetrievedChunk objects sorted by relevance (best first).
             May be empty if no chunks meet the threshold.
         """
-        k = top_k or self._top_k
+        k = top_k if top_k is not None else self._top_k
+        if k <= 0:
+            raise ValueError(f"top_k must be positive, got {k}.")
+
         thresh = threshold if threshold is not None else self._threshold
+        self._validate_threshold(thresh)
+
+        if not query.strip():
+            log.info("Empty retrieval query received; returning no chunks.")
+            return []
 
         log.info("Retrieving top-%d chunks for query: '%s'", k, query[:80])
 
@@ -147,6 +158,7 @@ class VectorStoreRetriever:
 
     def set_threshold(self, threshold: float) -> None:
         """Update the similarity threshold used for filtering retrieved chunks."""
+        self._validate_threshold(threshold)
         self._threshold = threshold
 
     def count_documents(self) -> int:
@@ -156,3 +168,10 @@ class VectorStoreRetriever:
         except Exception as exc:
             log.error("count_documents failed: %s", exc)
             return -1
+
+    @staticmethod
+    def _validate_threshold(threshold: float) -> None:
+        if not 0.0 <= threshold <= 1.0:
+            raise ValueError(
+                f"similarity_threshold must be between 0.0 and 1.0, got {threshold}."
+            )

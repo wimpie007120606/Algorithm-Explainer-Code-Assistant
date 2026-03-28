@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 from typing import Iterator
 
-SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md"}
+SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 
 
 def iter_documents(directory: Path, recursive: bool = True) -> Iterator[Path]:

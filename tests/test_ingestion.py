@@ -152,3 +152,20 @@ class TestIngestionPipeline:
         stats = pipeline.ingest_directory(directory=tmp_path)
         assert stats.files_succeeded == 2
         assert stats.total_chunks >= 2  # at least one chunk per file
+
+    def test_pipeline_records_vector_store_write_failure(self, tmp_text_file):
+        class FailingStore:
+            def add_documents(self, docs):
+                raise RuntimeError("disk full")
+
+        pipeline = IngestionPipeline(vector_store=FailingStore())
+        stats = pipeline.ingest_directory(
+            directory=tmp_text_file.parent,
+            file_paths=[tmp_text_file],
+        )
+
+        assert stats.files_succeeded == 1
+        assert stats.storage_failed is True
+        assert stats.storage_error == "disk full"
+        assert stats.is_fully_successful is False
+        assert any("Vector store write failed" in err for err in stats.errors)

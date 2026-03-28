@@ -83,8 +83,17 @@ def chunk_documents(
         Flat list of chunk Documents, each with full metadata.
     """
     settings = get_settings()
-    size = chunk_size or settings.chunk_size
-    overlap = chunk_overlap or settings.chunk_overlap
+    size = chunk_size if chunk_size is not None else settings.chunk_size
+    overlap = chunk_overlap if chunk_overlap is not None else settings.chunk_overlap
+
+    if size <= 0:
+        raise ValueError(f"chunk_size must be positive, got {size}.")
+    if overlap < 0:
+        raise ValueError(f"chunk_overlap must be non-negative, got {overlap}.")
+    if overlap >= size:
+        raise ValueError(
+            f"chunk_overlap ({overlap}) must be less than chunk_size ({size})."
+        )
 
     prose_splitter = _make_splitter(size, overlap, code_mode=False)
     code_splitter = _make_splitter(size, overlap, code_mode=True)

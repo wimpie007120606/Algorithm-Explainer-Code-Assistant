@@ -159,6 +159,44 @@ class TestVectorStoreRetriever:
         retriever.set_threshold(0.5)
         assert len(retriever.retrieve("q")) == 1
 
+    def test_empty_query_returns_empty_list_without_hitting_store(self):
+        store = MagicMock()
+        retriever = VectorStoreRetriever(store=store, top_k=4, similarity_threshold=0.0)
+
+        assert retriever.retrieve("   ") == []
+        store.similarity_search_with_score.assert_not_called()
+
+    def test_invalid_top_k_raises(self):
+        store = MagicMock()
+        with pytest.raises(ValueError, match="top_k must be positive"):
+            VectorStoreRetriever(store=store, top_k=0, similarity_threshold=0.0)
+
+    def test_invalid_threshold_raises(self):
+        store = MagicMock()
+        with pytest.raises(ValueError, match="similarity_threshold"):
+            VectorStoreRetriever(store=store, top_k=4, similarity_threshold=1.5)
+
+    def test_set_threshold_rejects_out_of_range_value(self):
+        store = MagicMock()
+        retriever = VectorStoreRetriever(store=store, top_k=4, similarity_threshold=0.0)
+
+        with pytest.raises(ValueError, match="similarity_threshold"):
+            retriever.set_threshold(-0.1)
+
+    def test_empty_query_still_validates_top_k(self):
+        store = MagicMock()
+        retriever = VectorStoreRetriever(store=store, top_k=4, similarity_threshold=0.0)
+
+        with pytest.raises(ValueError, match="top_k must be positive"):
+            retriever.retrieve("   ", top_k=0)
+
+    def test_retrieve_rejects_invalid_per_call_threshold(self):
+        store = MagicMock()
+        retriever = VectorStoreRetriever(store=store, top_k=4, similarity_threshold=0.0)
+
+        with pytest.raises(ValueError, match="similarity_threshold"):
+            retriever.retrieve("query", threshold=1.5)
+
 
 # ── get_vector_store factory ──────────────────────────────────────────────────
 

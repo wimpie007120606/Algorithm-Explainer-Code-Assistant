@@ -5,9 +5,10 @@ Each loader accepts a file path and returns a list of
 `langchain_core.documents.Document` objects with populated metadata.
 
 Supported formats:
-  - PDF  (.pdf)  — via pypdf
-  - Text (.txt)  — plain UTF-8
-  - Markdown (.md) — treated as plain text (structure preserved in content)
+  - PDF  (.pdf)           — via pypdf
+  - Text (.txt)           — plain UTF-8
+  - Markdown (.md)        — treated as plain text (structure preserved in content)
+  - Images (.png .jpg .jpeg .webp .gif .bmp) — GPT-4o vision description
 
 Design:  The loader layer is intentionally thin.  It only handles I/O and
 metadata attachment.  Text cleaning and chunking happen in later stages.
@@ -140,12 +141,22 @@ def load_text(path: Path) -> List[Document]:
     ]
 
 
+# ─── Image loader (lazy import to avoid requiring OpenAI for text-only use) ───
+
+def _load_image(path: Path) -> List[Document]:
+    from src.ingestion.image_loader import load_image
+    return load_image(path)
+
+
 # ─── Dispatcher ───────────────────────────────────────────────────────────────
+
+_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 
 _LOADERS = {
     ".pdf": load_pdf,
     ".txt": load_text,
     ".md": load_text,
+    **{ext: _load_image for ext in _IMAGE_EXTENSIONS},
 }
 
 
@@ -157,7 +168,7 @@ def load_document(path: Path) -> List[Document]:
         path: Path to the document file.
 
     Returns:
-        List of Document objects (one per page for PDFs, one for text files).
+        List of Document objects (one per page for PDFs, one for images/text).
 
     Raises:
         ValueError: For unsupported file types or parse failures.

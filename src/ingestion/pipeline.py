@@ -37,6 +37,13 @@ class IngestionStats:
     total_chunks: int = 0
     failed_files: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
+    storage_failed: bool = False
+    storage_error: str | None = None
+
+    @property
+    def is_fully_successful(self) -> bool:
+        """Return True only when processing and persistence both succeeded."""
+        return self.files_failed == 0 and not self.storage_failed
 
     def __str__(self) -> str:
         lines = [
@@ -47,10 +54,14 @@ class IngestionStats:
             f"  Pages loaded    : {self.total_pages}",
             f"  Chunks produced : {self.total_chunks}",
         ]
+        if self.storage_failed:
+            lines.append("  Storage status  : failed")
         if self.failed_files:
             lines.append("  Failed files:")
             for f in self.failed_files:
                 lines.append(f"    • {f}")
+        if self.storage_error:
+            lines.append(f"  Storage error   : {self.storage_error}")
         return "\n".join(lines)
 
 
@@ -130,8 +141,16 @@ class IngestionPipeline:
         # Persist to vector store if one is configured
         if self.vector_store is not None and all_chunks:
             log.info("Adding %d chunks to vector store…", len(all_chunks))
-            self.vector_store.add_documents(all_chunks)
-            log.info("Vector store updated successfully.")
+            try:
+                self.vector_store.add_documents(all_chunks)
+            except Exception as exc:
+                stats.storage_failed = True
+                stats.storage_error = str(exc)
+                stats.errors.append(f"Vector store write failed: {exc}")
+                log.error("Vector store update failed: %s", exc)
+                log.debug(traceback.format_exc())
+            else:
+                log.info("Vector store updated successfully.")
         elif self.vector_store is None:
             log.info("Dry-run mode: vector store not configured, %d chunks not stored.", len(all_chunks))
 

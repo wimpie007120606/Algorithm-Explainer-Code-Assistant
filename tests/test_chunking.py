@@ -130,3 +130,27 @@ class TestChunking:
         assert len(small_chunks) >= len(large_chunks), (
             "Smaller chunk size should produce more chunks"
         )
+
+    def test_zero_overlap_override_is_honoured(self, sample_document):
+        no_overlap_chunks = chunk_documents([sample_document], chunk_size=120, chunk_overlap=0)
+        overlap_chunks = chunk_documents([sample_document], chunk_size=120, chunk_overlap=40)
+
+        assert len(no_overlap_chunks) > 1
+        assert len(overlap_chunks) >= len(no_overlap_chunks)
+
+        for i in range(len(no_overlap_chunks) - 1):
+            trailing_words = set(no_overlap_chunks[i].page_content.split()[-8:])
+            leading_words = set(no_overlap_chunks[i + 1].page_content.split()[:8])
+            assert len(trailing_words & leading_words) <= 1
+
+    def test_invalid_chunk_size_raises(self, sample_document):
+        with pytest.raises(ValueError, match="chunk_size must be positive"):
+            chunk_documents([sample_document], chunk_size=0, chunk_overlap=0)
+
+    def test_invalid_chunk_overlap_raises(self, sample_document):
+        with pytest.raises(ValueError, match="chunk_overlap"):
+            chunk_documents([sample_document], chunk_size=100, chunk_overlap=100)
+
+    def test_negative_chunk_overlap_raises(self, sample_document):
+        with pytest.raises(ValueError, match="chunk_overlap must be non-negative"):
+            chunk_documents([sample_document], chunk_size=100, chunk_overlap=-1)

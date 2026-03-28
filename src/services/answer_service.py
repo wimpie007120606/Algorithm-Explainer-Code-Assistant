@@ -76,6 +76,21 @@ class AnswerService:
 
     # ── public API ────────────────────────────────────────────────────────────
 
+    def configure_retrieval(
+        self,
+        *,
+        top_k: Optional[int] = None,
+        threshold: Optional[float] = None,
+    ) -> None:
+        """Update runtime retrieval settings without exposing internal fields."""
+        if top_k is not None:
+            if top_k <= 0:
+                raise ValueError(f"top_k must be positive, got {top_k}.")
+            self._top_k = top_k
+
+        if threshold is not None:
+            self._retriever.set_threshold(threshold)
+
     def answer(self, question: str, top_k: Optional[int] = None) -> AnswerResult:
         """
         Answer *question* using retrieved context.
@@ -99,7 +114,15 @@ class AnswerService:
                 error="Empty question.",
             )
 
-        k = top_k or self._top_k
+        k = top_k if top_k is not None else self._top_k
+        if k is not None and k <= 0:
+            return AnswerResult(
+                question=question,
+                answer="Retrieval configuration error: top_k must be a positive integer.",
+                chunks=[],
+                has_context=False,
+                error="Invalid top_k.",
+            )
 
         # ── 1. Check knowledge base has content ──────────────────────────────
         doc_count = self._retriever.count_documents()
@@ -131,7 +154,7 @@ class AnswerService:
         # ── 2. Retrieve ───────────────────────────────────────────────────────
         try:
             chunks = self._retriever.retrieve(question, top_k=k)
-        except RuntimeError as exc:
+        except (RuntimeError, ValueError) as exc:
             log.error("Retrieval failed: %s", exc)
             return AnswerResult(
                 question=question,
