@@ -1,10 +1,11 @@
-.PHONY: install setup ingest rebuild-index run test test-cov eval clean lint help
+.PHONY: install install-dev setup ingest rebuild-index run test test-cov eval clean lint help
 
 # Default target
 help:
 	@echo "Algorithm RAG Assistant — available commands:"
 	@echo ""
 	@echo "  make install       Install Python dependencies"
+	@echo "  make install-dev   Install runtime + development dependencies"
 	@echo "  make setup         Copy .env.example → .env (run once)"
 	@echo "  make ingest        Ingest documents from data/raw/"
 	@echo "  make rebuild-index Wipe and rebuild the vector index"
@@ -18,6 +19,9 @@ help:
 
 install:
 	pip install -r requirements.txt
+
+install-dev:
+	pip install -r requirements-dev.txt
 
 setup:
 	@if [ ! -f .env ]; then \

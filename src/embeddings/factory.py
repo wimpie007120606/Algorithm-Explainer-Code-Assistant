@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from langchain_core.embeddings import Embeddings
 
-from src.config.settings import get_settings
+from src.config.settings import get_settings, missing_secret_message
 from src.utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -44,9 +44,7 @@ def get_embedding_model() -> "Embeddings":
 
     if provider == "openai":
         if not settings.openai_api_key:
-            raise EnvironmentError(
-                "OPENAI_API_KEY is not set. Cannot initialise OpenAI embeddings."
-            )
+            raise EnvironmentError(missing_secret_message("OPENAI_API_KEY"))
         from langchain_openai import OpenAIEmbeddings
 
         return OpenAIEmbeddings(
@@ -56,9 +54,7 @@ def get_embedding_model() -> "Embeddings":
 
     if provider == "gemini":
         if not settings.gemini_api_key:
-            raise EnvironmentError(
-                "GEMINI_API_KEY is not set. Cannot initialise Gemini embeddings."
-            )
+            raise EnvironmentError(missing_secret_message("GEMINI_API_KEY"))
         try:
             from langchain_google_genai import GoogleGenerativeAIEmbeddings
         except ImportError as exc:

@@ -8,6 +8,7 @@ codebase — it is cached on first call so there is no repeated I/O.
 from __future__ import annotations
 
 import os
+import tempfile
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -19,6 +20,14 @@ from pydantic_settings import BaseSettings
 # Load .env from project root (two levels up from this file: src/config/settings.py)
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(_PROJECT_ROOT / ".env", override=False)
+
+
+def missing_secret_message(secret_name: str) -> str:
+    """Return a deployment-friendly guidance message for missing secrets."""
+    return (
+        f"Missing {secret_name}. Add it in Streamlit Community Cloud secrets "
+        "or set it in your local environment."
+    )
 
 
 class Settings(BaseSettings):
@@ -80,6 +89,9 @@ class Settings(BaseSettings):
 
     def resolved_chroma_dir(self) -> Path:
         """Return an absolute Path for the Chroma persistence directory."""
+        if self.is_streamlit_cloud() and self.chroma_persist_dir == "./data/chroma_db":
+            return Path(tempfile.gettempdir()) / "algorithm_rag_assistant" / "chroma_db"
+
         p = Path(self.chroma_persist_dir)
         if not p.is_absolute():
             p = _PROJECT_ROOT / p
@@ -92,21 +104,51 @@ class Settings(BaseSettings):
         return p
 
     def resolved_processed_dir(self) -> Path:
+        if self.is_streamlit_cloud() and self.data_processed_dir == "./data/processed":
+            return Path(tempfile.gettempdir()) / "algorithm_rag_assistant" / "processed"
+
         p = Path(self.data_processed_dir)
         if not p.is_absolute():
             p = _PROJECT_ROOT / p
         return p
 
+    def is_streamlit_cloud(self) -> bool:
+        """Heuristic for Streamlit Community Cloud or a hosted Streamlit runtime."""
+        return any(
+            os.getenv(name)
+            for name in (
+                "STREAMLIT_SHARING_MODE",
+                "STREAMLIT_RUNTIME",
+                "STREAMLIT_CLOUD",
+            )
+        )
+
+    def required_llm_secret_name(self) -> str:
+        """Return the active provider secret name."""
+        return "OPENAI_API_KEY" if self.llm_provider == "openai" else "GEMINI_API_KEY"
+
+    def has_required_llm_api_key(self) -> bool:
+        """Return True if the selected LLM provider has its required API key."""
+        if self.llm_provider == "openai":
+            return bool(self.openai_api_key)
+        return bool(self.gemini_api_key)
+
+    def has_vector_store_credentials(self) -> bool:
+        """Return True if the selected vector store has its required credentials."""
+        if self.vector_db == "pinecone":
+            return bool(self.pinecone_api_key)
+        return True
+
+    def is_ready_for_rag(self) -> bool:
+        """Return True when the app has the minimum config needed to answer questions."""
+        return self.has_required_llm_api_key() and self.has_vector_store_credentials()
+
     def validate_llm_api_key(self) -> None:
         """Raise a clear error if the active provider has no API key configured."""
         if self.llm_provider == "openai" and not self.openai_api_key:
-            raise EnvironmentError(
-                "OPENAI_API_KEY is not set. Add it to your .env file or environment."
-            )
+            raise EnvironmentError(missing_secret_message("OPENAI_API_KEY"))
         if self.llm_provider == "gemini" and not self.gemini_api_key:
-            raise EnvironmentError(
-                "GEMINI_API_KEY is not set. Add it to your .env file or environment."
-            )
+            raise EnvironmentError(missing_secret_message("GEMINI_API_KEY"))
 
 
 @lru_cache(maxsize=1)

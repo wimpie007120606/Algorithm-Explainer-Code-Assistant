@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
 
-from src.config.settings import get_settings
+from src.config.settings import get_settings, missing_secret_message
 from src.utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -42,9 +42,7 @@ def get_llm() -> "BaseChatModel":
 
     if provider == "openai":
         if not settings.openai_api_key:
-            raise EnvironmentError(
-                "OPENAI_API_KEY is not set. Add it to your .env file."
-            )
+            raise EnvironmentError(missing_secret_message("OPENAI_API_KEY"))
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
@@ -56,9 +54,7 @@ def get_llm() -> "BaseChatModel":
 
     if provider == "gemini":
         if not settings.gemini_api_key:
-            raise EnvironmentError(
-                "GEMINI_API_KEY is not set. Add it to your .env file."
-            )
+            raise EnvironmentError(missing_secret_message("GEMINI_API_KEY"))
         try:
             from langchain_google_genai import ChatGoogleGenerativeAI
         except ImportError as exc:

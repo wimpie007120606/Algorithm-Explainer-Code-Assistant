@@ -18,7 +18,7 @@ from typing import List, Optional
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
-from src.config.settings import get_settings
+from src.config.settings import get_settings, missing_secret_message
 from src.utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -39,9 +39,7 @@ class PineconeVectorStore:
         self._index_name = index_name or settings.pinecone_index_name
 
         if not settings.pinecone_api_key:
-            raise EnvironmentError(
-                "PINECONE_API_KEY is not set. Cannot initialise Pinecone."
-            )
+            raise EnvironmentError(missing_secret_message("PINECONE_API_KEY"))
 
         try:
             from pinecone import Pinecone

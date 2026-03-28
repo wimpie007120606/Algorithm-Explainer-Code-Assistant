@@ -22,7 +22,7 @@ from typing import List
 
 from langchain_core.documents import Document
 
-from src.config.settings import get_settings
+from src.config.settings import get_settings, missing_secret_message
 from src.utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -96,8 +96,8 @@ def load_image(path: Path) -> List[Document]:
     settings = get_settings()
     if not settings.openai_api_key:
         raise EnvironmentError(
-            "OPENAI_API_KEY is required for image loading (GPT-4o vision). "
-            "Add it to your .env file."
+            f"{missing_secret_message('OPENAI_API_KEY')} "
+            "Image ingestion uses GPT-4o vision even if the main chat provider is Gemini."
         )
 
     log.info("Describing image with GPT-4o vision: %s", path.name)

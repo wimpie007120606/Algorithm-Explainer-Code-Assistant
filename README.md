@@ -140,6 +140,12 @@ source .venv/bin/activate      # Windows: .venv\Scripts\activate
 ### 2. Install dependencies
 
 ```bash
+pip install -r requirements-dev.txt
+```
+
+If you only want the runtime dependencies used by Streamlit Community Cloud, install:
+
+```bash
 pip install -r requirements.txt
 ```
 
@@ -159,6 +165,7 @@ EMBEDDING_MODEL=text-embedding-3-small
 ```
 
 All other settings have sensible defaults. See `.env.example` for the full list.
+For Streamlit Community Cloud, put the same keys into the app Secrets editor instead of using `.env`.
 
 ---
 
@@ -199,6 +206,8 @@ pytest tests/test_chunking.py   # Specific test file
 pytest -v --tb=short            # Verbose with short tracebacks
 pytest --cov=src                # With coverage report
 ```
+
+These commands assume you installed `requirements-dev.txt`.
 
 ---
 
@@ -258,6 +267,101 @@ Once documents are ingested:
 The assistant is designed to **refuse** to answer when the retrieved context is insufficient:
 
 > *"The provided documents do not contain enough information to answer this question."*
+
+### Streamlit Community Cloud Deployment
+
+1. Repo prerequisites
+
+- Push this repository to GitHub.
+- Make sure the branch you deploy contains [app/streamlit_app.py](app/streamlit_app.py), [requirements.txt](requirements.txt), and [.streamlit/secrets.toml.example](.streamlit/secrets.toml.example).
+- Use `requirements.txt` for deployment. It contains only runtime dependencies.
+
+2. Main entrypoint path
+
+- Select `app/streamlit_app.py` in the Streamlit dashboard.
+- This is the correct entrypoint because it is the existing Streamlit UI and already bootstraps the RAG services.
+
+3. Required secrets names
+
+- Required for the default OpenAI path:
+  - `OPENAI_API_KEY`
+- Required only if you switch providers:
+  - `GEMINI_API_KEY`
+- Required only if you switch vector stores:
+  - `PINECONE_API_KEY`
+  - `PINECONE_INDEX_NAME`
+  - `PINECONE_ENVIRONMENT`
+- Common optional config values you can also place in Streamlit secrets:
+  - `LLM_PROVIDER`
+  - `CHAT_MODEL`
+  - `EMBEDDING_MODEL`
+  - `VECTOR_DB`
+  - `DEFAULT_TOP_K`
+  - `SIMILARITY_THRESHOLD`
+  - `CHUNK_SIZE`
+  - `CHUNK_OVERLAP`
+
+4. How to push to GitHub
+
+```bash
+git add .
+git commit -m "Prepare Streamlit Community Cloud deployment"
+git push origin <your-branch>
+```
+
+5. How to create the app in the Streamlit dashboard
+
+- Go to Streamlit Community Cloud.
+- Click `Create app`.
+- Choose your GitHub repository.
+- Choose the branch you pushed.
+- Set the main file path to `app/streamlit_app.py`.
+- Deploy.
+
+6. What to put in secrets
+
+Example minimal secrets for the default OpenAI deployment:
+
+```toml
+LLM_PROVIDER = "openai"
+CHAT_MODEL = "gpt-4o-mini"
+EMBEDDING_MODEL = "text-embedding-3-small"
+VECTOR_DB = "chroma"
+OPENAI_API_KEY = "sk-..."
+```
+
+If you want Gemini instead:
+
+```toml
+LLM_PROVIDER = "gemini"
+CHAT_MODEL = "gemini-1.5-flash"
+EMBEDDING_MODEL = "models/embedding-001"
+VECTOR_DB = "chroma"
+GEMINI_API_KEY = "..."
+```
+
+7. Common failure causes
+
+- Missing `OPENAI_API_KEY` or `GEMINI_API_KEY`.
+- Setting `VECTOR_DB = "pinecone"` without also adding Pinecone secrets.
+- Expecting local Chroma data to persist across Streamlit Community Cloud restarts.
+- Forgetting that image ingestion requires `OPENAI_API_KEY` even if the main chat provider is Gemini.
+
+8. How to test locally before deploy
+
+```bash
+pip install -r requirements-dev.txt
+cp .env.example .env
+streamlit run app/streamlit_app.py
+pytest -q
+```
+
+Deployment notes:
+
+- Streamlit secrets are automatically bridged into environment variables by the app at startup.
+- On Streamlit Community Cloud, the default Chroma storage path moves to `/tmp/algorithm_rag_assistant/chroma_db`.
+- That storage is ephemeral. Uploaded or sample-ingested documents can disappear after app restarts and may need to be re-ingested.
+- The repo includes bundled sample markdown docs under `data/raw/`, and the app exposes a `Load bundled sample docs` button so a fresh cloud deploy is usable without committing a vector database.
 
 It will not:
 - Invent time complexity claims

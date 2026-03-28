@@ -12,6 +12,7 @@ Architecture:
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -30,11 +31,29 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+
+def _bootstrap_streamlit_secrets() -> None:
+    """Expose top-level Streamlit secrets as env vars for the shared settings layer."""
+    try:
+        secret_values = st.secrets.to_dict()
+    except Exception:
+        return
+
+    for key, value in secret_values.items():
+        if not isinstance(key, str) or not key.isupper():
+            continue
+        if isinstance(value, (str, int, float, bool)):
+            os.environ.setdefault(key, str(value))
+
+
+_bootstrap_streamlit_secrets()
+
 # ─── imports after page_config ────────────────────────────────────────────────
-from src.config.settings import get_settings
+from src.config.settings import get_settings, missing_secret_message
 from src.ingestion.pipeline import IngestionPipeline
 from src.services.answer_service import AnswerService, AnswerResult
 from src.services.citation_service import CitationService
+from src.utils.files import iter_documents
 from src.vectordb.retriever import VectorStoreRetriever
 from src.utils.logging import get_logger
 
@@ -109,8 +128,13 @@ def _get_answer_service(top_k: int) -> AnswerService:
 
 @st.cache_resource(show_spinner="Loading ingestion pipeline…")
 def _get_ingestion_pipeline() -> IngestionPipeline:
-    from src.vectordb.retriever import get_vector_store
-    return IngestionPipeline(vector_store=get_vector_store())
+    try:
+        from src.vectordb.retriever import get_vector_store
+
+        return IngestionPipeline(vector_store=get_vector_store())
+    except Exception as exc:
+        st.error(f"Failed to initialise the ingestion pipeline: {exc}")
+        st.stop()
 
 
 # ─── document library ─────────────────────────────────────────────────────────
@@ -167,9 +191,14 @@ def _render_document_library() -> None:
 
 def _render_sidebar() -> dict:
     settings = get_settings()
+    image_upload_enabled = bool(settings.openai_api_key)
+    upload_types = ["pdf", "txt", "md"]
+    if image_upload_enabled:
+        upload_types.extend(["png", "jpg", "jpeg", "webp", "gif", "bmp"])
 
     with st.sidebar:
         st.title("⚙️ Settings")
+        _render_startup_checks()
         st.divider()
 
         st.subheader("Retrieval")
@@ -195,10 +224,13 @@ def _render_sidebar() -> dict:
 
         st.divider()
         st.subheader("📄 Ingest Documents")
-        st.caption("PDFs, text, markdown, and images (PNG/JPG/WEBP)")
+        if image_upload_enabled:
+            st.caption("PDFs, text, markdown, and images (PNG/JPG/WEBP)")
+        else:
+            st.caption("PDFs, text, and markdown. Image ingestion unlocks after adding OPENAI_API_KEY.")
         uploaded_files = st.file_uploader(
             "Upload files",
-            type=["pdf", "txt", "md", "png", "jpg", "jpeg", "webp", "gif", "bmp"],
+            type=upload_types,
             accept_multiple_files=True,
             help="Images are described using GPT-4o vision before indexing.",
             label_visibility="collapsed",
@@ -215,8 +247,23 @@ def _render_sidebar() -> dict:
                     if len(image_files) > 3:
                         st.caption(f"…and {len(image_files) - 3} more image(s)")
 
-            if st.button("Ingest uploaded files", type="primary", use_container_width=True):
+            if st.button(
+                "Ingest uploaded files",
+                type="primary",
+                use_container_width=True,
+                disabled=not settings.is_ready_for_rag(),
+            ):
                 _handle_upload_ingestion(uploaded_files)
+
+        bundled_docs = _get_bundled_sample_paths()
+        if bundled_docs:
+            st.caption(f"{len(bundled_docs)} bundled sample document(s) available in the repo.")
+            if st.button(
+                "Load bundled sample docs",
+                use_container_width=True,
+                disabled=not settings.is_ready_for_rag(),
+            ):
+                _handle_sample_ingestion(bundled_docs)
 
         st.divider()
         st.subheader("📚 Document Library")
@@ -244,9 +291,47 @@ def _render_sidebar_info() -> None:
             f"**LLM:** `{settings.chat_model}` ({settings.llm_provider})\n\n"
             f"**Embeddings:** `{settings.embedding_model}`\n\n"
             f"**Vector DB:** `{settings.vector_db}`\n\n"
+            f"**Chroma Dir:** `{settings.resolved_chroma_dir()}`\n\n"
             f"**Chunk size:** {settings.chunk_size} chars\n\n"
             f"**Overlap:** {settings.chunk_overlap} chars"
         )
+
+
+def _render_startup_checks() -> None:
+    settings = get_settings()
+
+    if not settings.has_required_llm_api_key():
+        st.warning(
+            f"{missing_secret_message(settings.required_llm_secret_name())} "
+            "Question answering and ingestion stay disabled until you add it."
+        )
+
+    if settings.vector_db == "pinecone" and not settings.pinecone_api_key:
+        st.warning(
+            f"{missing_secret_message('PINECONE_API_KEY')} "
+            "Switch VECTOR_DB to `chroma` or add Pinecone secrets."
+        )
+
+    if settings.is_streamlit_cloud() and settings.vector_db == "chroma":
+        st.info(
+            "This deployment uses local Chroma storage in `/tmp`, which is ephemeral on "
+            "Streamlit Community Cloud. Uploaded or bundled documents can disappear after "
+            "app restarts and may need to be re-ingested."
+        )
+
+    if not settings.openai_api_key:
+        st.caption(
+            "Image ingestion requires `OPENAI_API_KEY` because diagrams are described "
+            "with GPT-4o vision."
+        )
+
+
+def _get_bundled_sample_paths() -> list[Path]:
+    try:
+        raw_dir = get_settings().resolved_raw_dir()
+        return [path for path in iter_documents(raw_dir, recursive=True) if path.name != ".gitkeep"]
+    except FileNotFoundError:
+        return []
 
 
 # ─── ingestion ────────────────────────────────────────────────────────────────
@@ -319,6 +404,29 @@ def _handle_upload_ingestion(uploaded_files) -> None:
         st.balloons()
 
 
+def _handle_sample_ingestion(file_paths: list[Path]) -> None:
+    pipeline = _get_ingestion_pipeline()
+    with st.spinner("Ingesting bundled sample documents…"):
+        stats = pipeline.ingest_directory(
+            directory=file_paths[0].parent,
+            file_paths=file_paths,
+        )
+
+    if stats.storage_failed:
+        st.error(f"Bundled sample ingestion failed during storage: {stats.storage_error}")
+        return
+
+    if stats.files_failed > 0:
+        st.error("Some bundled sample documents failed to ingest.")
+        for err in stats.errors:
+            st.error(err)
+        return
+
+    st.success(f"Loaded **{stats.files_succeeded}** bundled sample document(s).")
+    st.cache_resource.clear()
+    st.rerun()
+
+
 def _show_kb_status() -> None:
     try:
         retriever = VectorStoreRetriever()
@@ -344,7 +452,7 @@ def _render_header() -> None:
     )
 
 
-def _render_query_input() -> tuple[str, bool]:
+def _render_query_input(can_submit: bool) -> tuple[str, bool]:
     with st.form("query_form", clear_on_submit=False):
         question = st.text_area(
             "Your question",
@@ -356,7 +464,7 @@ def _render_query_input() -> tuple[str, bool]:
             height=100,
             label_visibility="collapsed",
         )
-        submitted = st.form_submit_button("Ask", type="primary")
+        submitted = st.form_submit_button("Ask", type="primary", disabled=not can_submit)
     return question.strip(), submitted
 
 
@@ -477,6 +585,7 @@ def _render_history() -> None:
 def main() -> None:
     _init_session_state()
     cfg = _render_sidebar()
+    settings = get_settings()
     _render_header()
 
     with st.expander("💡 Example queries", expanded=False):
@@ -492,7 +601,7 @@ def main() -> None:
             st.markdown(f"- *{ex}*")
 
     st.markdown("#### Ask a question")
-    question, submitted = _render_query_input()
+    question, submitted = _render_query_input(settings.is_ready_for_rag())
 
     if submitted and question:
         service = _get_answer_service(top_k=cfg["top_k"])
