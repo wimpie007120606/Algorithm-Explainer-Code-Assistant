@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     default_top_k: int = Field(4, alias="DEFAULT_TOP_K")
     similarity_threshold: float = Field(0.3, alias="SIMILARITY_THRESHOLD")
     retrieval_candidate_multiplier: int = Field(4, alias="RETRIEVAL_CANDIDATE_MULTIPLIER")
-    retrieval_max_candidates: int = Field(24, alias="RETRIEVAL_MAX_CANDIDATES")
+    retrieval_max_candidates: int = Field(48, alias="RETRIEVAL_MAX_CANDIDATES")
     retrieval_lexical_weight: float = Field(0.18, alias="RETRIEVAL_LEXICAL_WEIGHT")
 
     # ── Chunking ──────────────────────────────────────────────────────────────

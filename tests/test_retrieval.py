@@ -101,7 +101,7 @@ class TestVectorStoreRetriever:
 
         store.similarity_search_with_score.assert_called_once_with(
             "query",
-            k=24,
+            k=28,
             metadata_filter=None,
         )
 

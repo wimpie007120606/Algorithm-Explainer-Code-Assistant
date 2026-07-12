@@ -101,10 +101,14 @@ _CSS = """
         border-bottom: 1px solid var(--study-line);
         padding: 1.35rem 0 1.25rem;
         margin-bottom: 1.1rem;
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr);
+        gap: 2rem;
+        align-items: center;
     }
     .study-hero h1 {
         margin: 0 0 .35rem 0;
-        font-size: 2.15rem;
+        font-size: 2.35rem;
         line-height: 1.1;
         letter-spacing: 0;
         color: var(--study-text);
@@ -114,6 +118,105 @@ _CSS = """
         margin: 0;
         max-width: 780px;
         font-size: 1rem;
+    }
+    .hero-kicker {
+        color: var(--study-dim);
+        font-size: .76rem;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        margin-bottom: .7rem;
+    }
+    .hero-command {
+        border-left: 1px solid var(--study-line);
+        color: var(--study-muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: .84rem;
+        margin-top: 1rem;
+        padding-left: .9rem;
+        line-height: 1.65;
+    }
+    .code-visual {
+        position: relative;
+        min-height: 245px;
+        border-top: 1px solid var(--study-line-soft);
+        border-bottom: 1px solid var(--study-line-soft);
+        overflow: hidden;
+    }
+    .code-visual::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+            linear-gradient(var(--study-line-soft) 1px, transparent 1px),
+            linear-gradient(90deg, var(--study-line-soft) 1px, transparent 1px);
+        background-size: 44px 44px;
+        opacity: .42;
+    }
+    .code-visual::after {
+        content: "∇";
+        position: absolute;
+        right: 1rem;
+        top: .2rem;
+        color: rgba(246, 247, 251, .09);
+        font-size: 8rem;
+        line-height: 1;
+        font-family: Georgia, serif;
+    }
+    .code-node {
+        position: absolute;
+        z-index: 1;
+        border: 1px solid var(--study-line);
+        background: rgba(8, 10, 15, .78);
+        color: var(--study-text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: .78rem;
+        padding: .42rem .58rem;
+        min-width: 64px;
+        text-align: center;
+    }
+    .code-node.python { left: 6%; top: 12%; }
+    .code-node.sql { right: 8%; top: 18%; }
+    .code-node.r { left: 20%; bottom: 13%; }
+    .code-node.cpp { right: 27%; bottom: 9%; }
+    .code-node.stats { left: 43%; top: 42%; }
+    .code-line {
+        position: absolute;
+        z-index: 1;
+        color: var(--study-muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: .76rem;
+        white-space: nowrap;
+    }
+    .code-line.one { left: 6%; top: 39%; }
+    .code-line.two { right: 6%; top: 56%; }
+    .code-line.three { left: 32%; top: 72%; }
+    .data-stack {
+        border-top: 1px solid var(--study-line-soft);
+        border-bottom: 1px solid var(--study-line-soft);
+        margin: 1rem 0 1.3rem;
+        padding: .9rem 0;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0;
+    }
+    .stack-item {
+        border-right: 1px solid var(--study-line-soft);
+        padding: 0 1rem;
+    }
+    .stack-item:last-child {
+        border-right: 0;
+    }
+    .stack-label {
+        color: var(--study-dim);
+        font-size: .72rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        margin-bottom: .25rem;
+    }
+    .stack-text {
+        color: var(--study-text);
+        font-size: .9rem;
+        line-height: 1.35;
     }
     .metric-grid {
         display: grid;
@@ -283,6 +386,12 @@ _CSS = """
         border-color: var(--study-line-soft) !important;
     }
     @media (max-width: 900px) {
+        .study-hero {
+            grid-template-columns: 1fr;
+        }
+        .code-visual {
+            min-height: 210px;
+        }
         .metric-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
@@ -294,6 +403,17 @@ _CSS = """
         }
         .study-hero h1 {
             font-size: 1.65rem;
+        }
+        .data-stack {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .stack-item:nth-child(2) {
+            border-right: 0;
+        }
+        .stack-item:nth-child(-n+2) {
+            padding-bottom: .8rem;
+            margin-bottom: .8rem;
+            border-bottom: 1px solid var(--study-line-soft);
         }
     }
 </style>
@@ -440,6 +560,24 @@ def _render_sidebar() -> dict:
         st.divider()
 
         st.subheader("Study Mode")
+        track_labels = {
+            "data_science": "Data Science Core",
+            "calculus": "Calculus",
+            "math_stats": "Math Stats",
+            "computer_science": "Computer Science",
+            "python_ds": "Python / Data Science",
+            "general": "General Study",
+        }
+        track_label = st.selectbox(
+            "Learning track",
+            options=list(track_labels.values()),
+            index=0,
+            help="Frames practice, explanations, and plans around a study pathway.",
+        )
+        learning_track = next(
+            key for key, label in track_labels.items() if label == track_label
+        )
+
         study_mode_labels = {
             "answer": "Answer",
             "explain": "Explain",
@@ -486,8 +624,8 @@ def _render_sidebar() -> dict:
         st.subheader("Retrieval")
         top_k = st.slider(
             "Context chunks",
-            min_value=1, max_value=12,
-            value=min(max(settings.default_top_k, 1), 12),
+            min_value=1, max_value=16,
+            value=min(max(settings.default_top_k, 6), 16),
             help="Number of final chunks sent to the model after reranking.",
         )
         threshold = st.slider(
@@ -507,7 +645,7 @@ def _render_sidebar() -> dict:
         st.divider()
         st.subheader("Add Material")
         if image_upload_enabled:
-            st.caption("PDFs, text, markdown, and images. Low-text PDFs can use vision fallback when PyMuPDF is installed.")
+            st.caption("Upload calculus, math stats, CS, Python, and data science textbooks. Text-layer PDFs work best; scanned pages can use vision fallback.")
         else:
             st.caption("PDFs, text, and markdown. Vision ingestion unlocks after adding OPENAI_API_KEY.")
         uploaded_files = st.file_uploader(
@@ -565,6 +703,7 @@ def _render_sidebar() -> dict:
         "top_k": top_k,
         "threshold": threshold,
         "study_mode": study_mode,
+        "learning_track": learning_track,
         "source_filter": source_filter,
         "learner_goal": learner_goal.strip(),
         "study_minutes": study_minutes,
@@ -752,8 +891,48 @@ def _render_header() -> None:
     st.markdown(
         """
         <div class="study-hero">
-            <h1>StudyMate Knowledge Coach</h1>
-            <p>Turn lecture notes, question papers, textbooks, screenshots, and diagrams into grounded answers, practice, flashcards, summaries, and timed study plans.</p>
+            <div>
+                <div class="hero-kicker">Data Science Mastery Library</div>
+                <h1>StudyMate Knowledge Coach</h1>
+                <p>Turn calculus, mathematical statistics, computer science, and Python data science textbooks into a grounded study system for explanations, practice, flashcards, summaries, and timed mastery plans.</p>
+                <div class="hero-command">
+                    ingest(textbooks) → retrieve(the right pages) → explain with citations<br>
+                    calculus + stats + CS + Python → data science fluency
+                </div>
+            </div>
+            <div class="code-visual" aria-hidden="true">
+                <div class="code-node python">Python</div>
+                <div class="code-node sql">SQL</div>
+                <div class="code-node r">R</div>
+                <div class="code-node cpp">C++</div>
+                <div class="code-node stats">Bayes</div>
+                <div class="code-line one">θ ← θ - α∇J(θ)</div>
+                <div class="code-line two">SELECT model, AVG(loss)</div>
+                <div class="code-line three">p(θ | data) ∝ p(data | θ)p(θ)</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        """
+        <div class="data-stack">
+            <div class="stack-item">
+                <div class="stack-label">Calculus</div>
+                <div class="stack-text">limits, derivatives, integrals, optimization</div>
+            </div>
+            <div class="stack-item">
+                <div class="stack-label">Math Stats</div>
+                <div class="stack-text">probability, inference, estimators, distributions</div>
+            </div>
+            <div class="stack-item">
+                <div class="stack-label">Computer Science</div>
+                <div class="stack-text">algorithms, data structures, complexity, systems</div>
+            </div>
+            <div class="stack-item">
+                <div class="stack-label">Python DS</div>
+                <div class="stack-text">NumPy, pandas, modeling, analysis workflows</div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -789,12 +968,12 @@ def _render_header() -> None:
 
 def _render_query_input(can_submit: bool, cfg: dict) -> tuple[str, bool]:
     placeholders = {
-        "answer": "Ask anything grounded in your notes, e.g. What questions are in the calculus paper?",
-        "explain": "e.g. Explain integration by parts from my uploaded notes step by step.",
-        "summary": "e.g. Summarize the main examinable ideas from this chapter.",
-        "practice": "e.g. Create practice questions from the uploaded memo, with short answers.",
-        "flashcards": "e.g. Make flashcards for all definitions and formulas in this source.",
-        "study_plan": "e.g. Build a 45-minute revision plan for this material.",
+        "answer": "Ask across your library, e.g. How do derivatives connect to gradient descent in Python?",
+        "explain": "e.g. Teach me maximum likelihood using calculus and math stats from my books.",
+        "summary": "e.g. Summarize the probability and calculus ideas I need for machine learning.",
+        "practice": "e.g. Create mixed calculus, stats, CS, and Python questions for a data science student.",
+        "flashcards": "e.g. Make flashcards for distributions, derivatives, algorithms, and pandas concepts.",
+        "study_plan": "e.g. Build a 2-hour study plan to master calculus foundations for data science.",
     }
     placeholder = placeholders.get(cfg["study_mode"], placeholders["answer"])
     with st.form("query_form", clear_on_submit=False):
@@ -960,13 +1139,13 @@ def main() -> None:
 
     with st.expander("Example study requests", expanded=False):
         for ex in [
-            "List the questions from my calculus question paper.",
-            "Explain the hardest formula in this chapter step by step.",
-            "Make 12 flashcards from the uploaded lecture notes.",
-            "Create a 45-minute study plan for this source.",
-            "Generate practice questions with short answers from this memo.",
-            "Summarize the key definitions and examples I should memorize.",
-            "What does the diagram on page 3 show?",
+            "Teach me how derivatives, optimization, and gradient descent connect.",
+            "Create mixed practice from calculus, math stats, CS, and Python data science.",
+            "Explain maximum likelihood using only my uploaded statistics textbook.",
+            "Build a 2-hour study plan for becoming strong at data science foundations.",
+            "Make flashcards for distributions, integrals, algorithms, and pandas workflows.",
+            "Compare the textbook explanations of variance, covariance, and correlation.",
+            "What Python concepts should I master before machine learning?",
         ]:
             st.markdown(f"- *{ex}*")
 
@@ -978,8 +1157,21 @@ def main() -> None:
         service.configure_retrieval(top_k=cfg["top_k"], threshold=cfg["threshold"])
 
         question_for_model = question
-        if cfg["learner_goal"] or cfg["study_mode"] == "study_plan":
+        track_context = {
+            "data_science": (
+                "Learning track: Data Science Core. Connect calculus, mathematical "
+                "statistics, computer science, Python, SQL, algorithms, and modeling "
+                "when the uploaded sources support those links."
+            ),
+            "calculus": "Learning track: Calculus mastery. Emphasize definitions, intuition, worked steps, and practice.",
+            "math_stats": "Learning track: Mathematical statistics. Emphasize probability, inference, estimators, and distributions.",
+            "computer_science": "Learning track: Computer science. Emphasize algorithms, data structures, complexity, and implementation ideas.",
+            "python_ds": "Learning track: Python for data science. Emphasize Python, NumPy, pandas, analysis, and modeling workflows.",
+            "general": "Learning track: General study. Keep the answer focused on the uploaded material.",
+        }
+        if cfg["learner_goal"] or cfg["study_mode"] == "study_plan" or cfg["learning_track"]:
             context_bits = [
+                track_context.get(cfg["learning_track"], track_context["general"]),
                 f"Available study time: {cfg['study_minutes']} minutes.",
             ]
             if cfg["learner_goal"]:
