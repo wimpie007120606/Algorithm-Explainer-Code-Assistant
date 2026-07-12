@@ -73,8 +73,8 @@ def main() -> None:
 
     print(str(stats))
 
-    if stats.files_failed > 0:
-        print("\n[WARNING] Some files failed — check the log above for details.")
+    if not stats.is_fully_successful:
+        print("\n[WARNING] Ingestion did not fully complete — check the log above for details.")
         sys.exit(1)
 
     print("\n✓ Ingestion complete.")

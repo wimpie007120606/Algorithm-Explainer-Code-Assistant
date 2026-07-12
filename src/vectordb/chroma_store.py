@@ -81,10 +81,44 @@ class ChromaVectorStore:
             return
 
         ids = [doc.metadata.get("chunk_id", f"chunk_{i}") for i, doc in enumerate(docs)]
+        batch_size = self._max_batch_size()
 
-        log.info("Upserting %d chunks into Chroma collection '%s'.", len(docs), self._collection_name)
-        self._store.add_documents(documents=docs, ids=ids)
+        log.info(
+            "Upserting %d chunks into Chroma collection '%s' (batch_size=%d).",
+            len(docs),
+            self._collection_name,
+            batch_size,
+        )
+        for start in range(0, len(docs), batch_size):
+            end = min(start + batch_size, len(docs))
+            self._store.add_documents(documents=docs[start:end], ids=ids[start:end])
+            log.info("Upserted chunks %d-%d of %d.", start + 1, end, len(docs))
         log.info("Upsert complete.")
+
+    def _max_batch_size(self) -> int:
+        """Return the largest safe add batch for this Chroma client."""
+        fallback = 5_000
+        client = getattr(self._store, "_client", None)
+        getter = getattr(client, "get_max_batch_size", None)
+        if callable(getter):
+            try:
+                value = int(getter())
+            except Exception as exc:
+                log.warning("Could not read Chroma max batch size: %s", exc)
+            else:
+                if value > 0:
+                    return value
+
+        value = getattr(client, "max_batch_size", None)
+        if value:
+            try:
+                value_int = int(value)
+            except (TypeError, ValueError):
+                return fallback
+            if value_int > 0:
+                return value_int
+
+        return fallback
 
     def similarity_search_with_score(
         self,

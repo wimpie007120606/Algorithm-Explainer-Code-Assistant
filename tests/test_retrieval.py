@@ -21,6 +21,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from langchain_core.documents import Document
 
+from src.vectordb.chroma_store import ChromaVectorStore
 from src.vectordb.retriever import RetrievedChunk, VectorStoreRetriever
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -234,6 +235,31 @@ class TestVectorStoreRetriever:
 
         with pytest.raises(ValueError, match="similarity_threshold"):
             retriever.retrieve("query", threshold=1.5)
+
+
+# ── ChromaVectorStore ─────────────────────────────────────────────────────────
+
+
+class TestChromaVectorStore:
+
+    def test_add_documents_batches_to_client_limit(self):
+        store = object.__new__(ChromaVectorStore)
+        underlying_store = MagicMock()
+        underlying_store._client.get_max_batch_size.return_value = 2
+        store._store = underlying_store
+        store._collection_name = "test_collection"
+        docs = [
+            Document(page_content=f"content {i}", metadata={"chunk_id": f"chunk-{i}"})
+            for i in range(5)
+        ]
+
+        store.add_documents(docs)
+
+        assert underlying_store.add_documents.call_count == 3
+        calls = underlying_store.add_documents.call_args_list
+        assert calls[0].kwargs["ids"] == ["chunk-0", "chunk-1"]
+        assert calls[1].kwargs["ids"] == ["chunk-2", "chunk-3"]
+        assert calls[2].kwargs["ids"] == ["chunk-4"]
 
 
 # ── get_vector_store factory ──────────────────────────────────────────────────

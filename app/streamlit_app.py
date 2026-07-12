@@ -694,6 +694,7 @@ def _render_sidebar() -> dict:
                 f"{metrics['needs_ocr']} source(s) look low-text. Re-ingest with OCR/vision before relying on them."
             )
         if st.button("Refresh library", use_container_width=True):
+            st.cache_resource.clear()
             st.rerun()
 
         st.divider()
