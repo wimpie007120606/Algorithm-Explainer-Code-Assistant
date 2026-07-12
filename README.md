@@ -1,8 +1,8 @@
-# Algorithm Explainer & Code Assistant (RAG Pipeline)
+# StudyMate Knowledge Coach (RAG Pipeline)
 
-A production-quality **Retrieval-Augmented Generation (RAG)** system that answers questions about algorithms and data structures using your own uploaded technical documents as the exclusive knowledge source.
+A production-quality **Retrieval-Augmented Generation (RAG)** system that turns uploaded study material into grounded answers, summaries, flashcards, practice questions, and timed study plans.
 
-Ask about Ford-Fulkerson, BFS, Dijkstra, Quadtrees — and get grounded answers with source citations, complexity analysis, and Java code **only when supported by your documents**.
+Upload lecture notes, textbooks, question papers, memos, diagrams, screenshots, or code notes — then get responses with source citations **only when supported by your documents**.
 
 ---
 
@@ -14,7 +14,8 @@ This system solves that by:
 1. **Grounding every answer** in retrieved document chunks, not model hallucination
 2. **Citing the source** (filename, page number) for every claim
 3. **Explicitly refusing** to answer when the retrieved context is insufficient
-4. **Separating concerns cleanly** — ingestion, retrieval, generation, and UI are decoupled modules
+4. **Supporting real study workflows** — answer, explain, summarize, quiz, flashcard, and study-plan modes
+5. **Separating concerns cleanly** — ingestion, retrieval, generation, and UI are decoupled modules
 
 This is not a notebook tutorial. It is a portfolio-grade engineering project with a real architecture, tests, evaluation, and production-minded design.
 
@@ -63,7 +64,7 @@ User Question
 | LLM | OpenAI (`gpt-4o-mini` default) / Gemini |
 | Embeddings | OpenAI `text-embedding-3-small` / Gemini |
 | Vector DB | ChromaDB (local) / Pinecone (optional) |
-| PDF Parsing | pypdf |
+| PDF Parsing | pypdf + optional PyMuPDF page rendering for vision fallback |
 | Text Splitting | langchain-text-splitters |
 | Config | pydantic-settings + python-dotenv |
 | Testing | pytest |
@@ -88,7 +89,7 @@ algorithm-rag-assistant/
 │   ├── vectordb/
 │   │   ├── chroma_store.py       # ChromaDB adapter
 │   │   ├── pinecone_store.py     # Pinecone adapter (optional)
-│   │   └── retriever.py          # VectorStoreRetriever with threshold filtering
+│   │   └── retriever.py          # VectorStoreRetriever with reranking + threshold filtering
 │   ├── llm/
 │   │   ├── factory.py            # Chat model factory (OpenAI / Gemini)
 │   │   ├── prompts.py            # System prompt, context formatting
@@ -238,11 +239,11 @@ python scripts/rebuild_index.py --yes  # Skip confirmation
 Once documents are ingested:
 
 - *"Explain how Ford-Fulkerson works."*
-- *"What is the Max-Flow Min-Cut theorem?"*
-- *"Give the Java implementation for a Quadtree insertion method."*
-- *"Compare BFS and DFS using the uploaded lecture notes."*
-- *"Why does this recurrence solve to O(n log n) according to the notes?"*
-- *"What are the limitations of Bellman-Ford compared to Dijkstra?"*
+- *"List the questions from my calculus question paper."*
+- *"Make flashcards for the definitions in this chapter."*
+- *"Create a 45-minute study plan for this uploaded memo."*
+- *"Generate practice questions with short answers from these lecture notes."*
+- *"Explain the diagram on page 3 using only the uploaded source."*
 
 ---
 
@@ -258,6 +259,12 @@ Once documents are ingested:
 | `CHUNK_OVERLAP` | `150` | Overlap between chunks |
 | `DEFAULT_TOP_K` | `4` | Chunks retrieved per query |
 | `SIMILARITY_THRESHOLD` | `0.3` | Min relevance score (0 = off) |
+| `RETRIEVAL_CANDIDATE_MULTIPLIER` | `4` | Candidate expansion before reranking |
+| `RETRIEVAL_MAX_CANDIDATES` | `24` | Upper bound for expanded retrieval candidates |
+| `RETRIEVAL_LEXICAL_WEIGHT` | `0.18` | Keyword/source-name boost mixed into vector relevance |
+| `PDF_MIN_TEXT_CHARS` | `40` | Minimum useful text per PDF page before fallback/skip |
+| `PDF_VISION_FALLBACK` | `true` | Render low-text PDF pages and transcribe with GPT-4o vision |
+| `PDF_VISION_DPI` | `180` | Render resolution for PDF vision fallback |
 | `TEMPERATURE` | `0.0` | LLM temperature (0 = deterministic) |
 
 ---
@@ -298,6 +305,10 @@ The assistant is designed to **refuse** to answer when the retrieved context is 
   - `VECTOR_DB`
   - `DEFAULT_TOP_K`
   - `SIMILARITY_THRESHOLD`
+  - `RETRIEVAL_CANDIDATE_MULTIPLIER`
+  - `RETRIEVAL_MAX_CANDIDATES`
+  - `RETRIEVAL_LEXICAL_WEIGHT`
+  - `PDF_VISION_FALLBACK`
   - `CHUNK_SIZE`
   - `CHUNK_OVERLAP`
 
@@ -345,7 +356,8 @@ GEMINI_API_KEY = "..."
 - Missing `OPENAI_API_KEY` or `GEMINI_API_KEY`.
 - Setting `VECTOR_DB = "pinecone"` without also adding Pinecone secrets.
 - Expecting local Chroma data to persist across Streamlit Community Cloud restarts.
-- Forgetting that image ingestion requires `OPENAI_API_KEY` even if the main chat provider is Gemini.
+- Forgetting that image/scanned-page ingestion requires `OPENAI_API_KEY` even if the main chat provider is Gemini.
+- Expecting scanned PDFs to work without `PyMuPDF` installed for PDF page rendering.
 
 8. How to test locally before deploy
 
@@ -364,10 +376,10 @@ Deployment notes:
 - The repo includes bundled sample markdown docs under `data/raw/`, and the app exposes a `Load bundled sample docs` button so a fresh cloud deploy is usable without committing a vector database.
 
 It will not:
-- Invent time complexity claims
-- Fabricate Java implementations
-- Make up proofs or theorems
+- Invent unsupported facts, formulas, definitions, proofs, or code
+- Make up answers to missing exam questions
 - Pretend certainty when evidence is weak
+- Treat page labels like `Page 1` as useful study content
 
 This behavior is enforced by the system prompt in `src/llm/prompts.py`.
 
@@ -375,21 +387,21 @@ This behavior is enforced by the system prompt in `src/llm/prompts.py`.
 
 ## Limitations
 
-- **No OCR:** Scanned/image PDFs are not supported. Use text-layer PDFs only.
+- **OCR/vision fallback has prerequisites:** Scanned or image-heavy PDFs need `OPENAI_API_KEY` and `PyMuPDF`. Without those, low-text pages are skipped with a clear ingestion error.
 - **No conversation memory:** Each query is answered independently from fresh context — the session history panel is display-only and is not fed back into the RAG pipeline.
 - **Embedding cost:** Each ingestion call generates embeddings via the API. Large document sets cost money.
 - **Chunking is approximate:** Very short documents may produce only one chunk; very long code blocks may be split at non-ideal boundaries.
-- **Evaluation suite is generic:** The default `EvalCase` list uses generic algorithm keywords. Replace with document-specific cases for meaningful metrics.
+- **Evaluation suite is generic:** Replace the default `EvalCase` list with document-specific cases for meaningful metrics.
 
 ---
 
 ## Future Improvements
 
-- [ ] Reranking layer (cross-encoder reranking after initial retrieval)
-- [ ] Hybrid retrieval (BM25 keyword + vector cosine)
-- [ ] OCR support via `pytesseract` for scanned PDFs
+- [x] Lightweight reranking with vector + lexical/source-name signals
+- [x] Optional GPT-4o vision fallback for low-text PDF pages
 - [ ] Streaming LLM responses in the Streamlit UI
 - [ ] Multi-turn conversation with context history
+- [ ] Cross-encoder reranking for larger document sets
 - [ ] RAGAS integration for automatic faithfulness evaluation
 - [ ] Docker compose for one-command deployment
 - [ ] Pinecone auto-provisioning script
@@ -406,12 +418,12 @@ This behavior is enforced by the system prompt in `src/llm/prompts.py`.
 
 > Copy and adapt these for your resume or portfolio write-up:
 
-- **Built a production-grade RAG system** in Python (LangChain, ChromaDB, OpenAI) that answers algorithm questions grounded exclusively in user-uploaded documents with full source citation.
-- **Designed a modular ingestion pipeline** (PDF/TXT/MD → parse → chunk → embed → index) with deterministic chunk IDs for idempotent re-indexing and code-aware chunking for pseudocode-heavy documents.
-- **Implemented a strict prompt engineering framework** that enforces citation grounding, refuses hallucinated answers, and structures responses into explanation, Java code, and uncertainty sections.
+- **Built a production-grade study RAG system** in Python (LangChain, ChromaDB, OpenAI) that turns uploaded course material into grounded answers, summaries, flashcards, practice questions, and study plans with source citation.
+- **Designed a modular ingestion pipeline** (PDF/TXT/MD/image → parse → chunk → embed → index) with deterministic chunk IDs, low-text PDF detection, and optional GPT-4o vision fallback for scanned/math-heavy pages.
+- **Implemented a strict prompt engineering framework** that enforces citation grounding, refuses hallucinated answers, and adapts responses to answer, explain, summary, practice, flashcard, and study-plan modes.
 - **Built provider-agnostic adapter layers** for LLM (OpenAI/Gemini), embeddings, and vector store (ChromaDB/Pinecone) enabling zero-code-change backend swaps.
 - **Wrote a lightweight retrieval evaluation module** computing hit@k, precision@k, MRR, and context recall to validate retrieval quality without external evaluation infrastructure.
-- **Delivered a polished Streamlit UI** with configurable retrieval settings, real-time document upload, citation display, debug panels, and answer export.
+- **Delivered a polished Streamlit UI** with study-mode controls, source focus, document health diagnostics, real-time upload, citation display, debug panels, and answer export.
 
 ---
 

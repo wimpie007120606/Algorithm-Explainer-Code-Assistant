@@ -16,12 +16,12 @@ Validates:
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 from langchain_core.documents import Document
 
 from src.vectordb.retriever import RetrievedChunk, VectorStoreRetriever
-
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -79,14 +79,18 @@ class TestVectorStoreRetriever:
         assert all(isinstance(c, RetrievedChunk) for c in chunks)
 
     def test_retrieve_passes_top_k_to_store(self):
-        """VectorStoreRetriever must forward top_k to the underlying store call."""
+        """VectorStoreRetriever fetches an expanded candidate set for reranking."""
         store = MagicMock()
         store.similarity_search_with_score.return_value = []
         retriever = VectorStoreRetriever(store=store, top_k=5, similarity_threshold=0.0)
 
         retriever.retrieve("query", top_k=3)
 
-        store.similarity_search_with_score.assert_called_once_with("query", k=3)
+        store.similarity_search_with_score.assert_called_once_with(
+            "query",
+            k=12,
+            metadata_filter=None,
+        )
 
     def test_retrieve_uses_instance_top_k_when_not_overridden(self):
         store = MagicMock()
@@ -95,7 +99,27 @@ class TestVectorStoreRetriever:
 
         retriever.retrieve("query")
 
-        store.similarity_search_with_score.assert_called_once_with("query", k=7)
+        store.similarity_search_with_score.assert_called_once_with(
+            "query",
+            k=24,
+            metadata_filter=None,
+        )
+
+    def test_retrieve_passes_source_filter_to_store(self):
+        store = MagicMock()
+        store.similarity_search_with_score.return_value = [
+            (_make_doc("calculus questions", filename="calculus.pdf"), 0.9),
+        ]
+        retriever = VectorStoreRetriever(store=store, top_k=4, similarity_threshold=0.0)
+
+        chunks = retriever.retrieve("calculus questions", source_filter="calculus.pdf")
+
+        assert len(chunks) == 1
+        store.similarity_search_with_score.assert_called_once_with(
+            "calculus questions",
+            k=16,
+            metadata_filter={"filename": "calculus.pdf"},
+        )
 
     def test_threshold_filters_low_score_chunks(self):
         raw = [
@@ -117,6 +141,20 @@ class TestVectorStoreRetriever:
         retriever = VectorStoreRetriever(store=store, top_k=4, similarity_threshold=0.0)
         chunks = retriever.retrieve("query")
         assert len(chunks) == 2
+
+    def test_lexical_overlap_boosts_score_metadata(self):
+        raw = [
+            (_make_doc("calculus integrals derivatives", filename="math.pdf"), 0.4),
+            (_make_doc("binary trees heaps", filename="cs.pdf"), 0.4),
+        ]
+        store = _mock_store(raw)
+        retriever = VectorStoreRetriever(store=store, top_k=2, similarity_threshold=0.0)
+
+        chunks = retriever.retrieve("calculus derivatives")
+
+        assert chunks[0].metadata["filename"] == "math.pdf"
+        assert chunks[0].metadata["lexical_score"] > chunks[1].metadata["lexical_score"]
+        assert "vector_score" in chunks[0].metadata
 
     def test_empty_retrieval_returns_empty_list(self):
         store = _mock_store([])

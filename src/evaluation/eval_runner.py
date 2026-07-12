@@ -10,16 +10,13 @@ the `DEFAULT_EVAL_CASES` list with cases relevant to your ingested documents.
 
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass
-from pathlib import Path
-from typing import List, Optional
 
 from src.evaluation.metrics import EvalCase, EvalResult, RetrievalMetrics
 from src.services.answer_service import AnswerService
-from src.vectordb.retriever import VectorStoreRetriever
 from src.utils.logging import get_logger
+from src.vectordb.retriever import VectorStoreRetriever
 
 log = get_logger(__name__)
 
@@ -29,7 +26,7 @@ log = get_logger(__name__)
 # Update these when you ingest your own PDFs — set expected_sources to the
 # filename(s) that should contain the answer.
 
-DEFAULT_EVAL_CASES: List[EvalCase] = [
+DEFAULT_EVAL_CASES: list[EvalCase] = [
     EvalCase(
         question="What is the time complexity of Dijkstra's algorithm?",
         expected_sources=["sample_algorithms.md"],
@@ -61,7 +58,7 @@ DEFAULT_EVAL_CASES: List[EvalCase] = [
 class EvalReport:
     """Aggregated evaluation report."""
 
-    results: List[EvalResult]
+    results: list[EvalResult]
     total_cases: int
     cases_with_error: int
     hit_rate: float          # fraction of cases with hit@k = True
@@ -131,7 +128,7 @@ class EvalRunner:
 
     def __init__(
         self,
-        cases: Optional[List[EvalCase]] = None,
+        cases: list[EvalCase] | None = None,
         top_k: int = 4,
         dry_run: bool = False,
     ) -> None:
@@ -146,7 +143,7 @@ class EvalRunner:
         log.info("Starting evaluation: %d cases, top_k=%d, dry_run=%s", len(self._cases), self._top_k, self._dry_run)
         start = time.time()
 
-        results: List[EvalResult] = []
+        results: list[EvalResult] = []
 
         for i, case in enumerate(self._cases, start=1):
             log.info("[%d/%d] Evaluating: %s", i, len(self._cases), case.question[:60])
@@ -156,7 +153,7 @@ class EvalRunner:
         elapsed = time.time() - start
 
         # Aggregate
-        def _mean(values: List[float]) -> float:
+        def _mean(values: list[float]) -> float:
             return sum(values) / len(values) if values else 0.0
 
         hit_rate = _mean([float(r.hit_at_k) for r in results])

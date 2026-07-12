@@ -51,7 +51,7 @@ def main() -> None:
 
     if not directory.exists():
         print(f"[ERROR] Directory not found: {directory}")
-        print(f"        Create it and place your PDFs/TXT/MD files there.")
+        print("        Create it and place your PDFs/TXT/MD files there.")
         sys.exit(1)
 
     log.info("Ingestion starting. Source: %s | reset=%s | dry_run=%s", directory, args.reset, args.dry_run)

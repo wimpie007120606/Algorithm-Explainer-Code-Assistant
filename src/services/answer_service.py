@@ -12,12 +12,12 @@ All error paths produce clear, user-friendly messages rather than raw exceptions
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional
 
 from src.llm.qa_chain import build_qa_chain
-from src.vectordb.retriever import RetrievedChunk, VectorStoreRetriever
 from src.utils.logging import get_logger
+from src.vectordb.retriever import RetrievedChunk, VectorStoreRetriever
 
 log = get_logger(__name__)
 
@@ -28,12 +28,12 @@ class AnswerResult:
 
     question: str
     answer: str
-    chunks: List[RetrievedChunk]
+    chunks: list[RetrievedChunk]
     has_context: bool
-    error: Optional[str] = None
+    error: str | None = None
 
     # Derived convenience fields
-    source_filenames: List[str] = field(default_factory=list)
+    source_filenames: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.source_filenames:
@@ -66,9 +66,9 @@ class AnswerService:
 
     def __init__(
         self,
-        retriever: Optional[VectorStoreRetriever] = None,
-        qa_chain: Optional[Callable] = None,
-        top_k: Optional[int] = None,
+        retriever: VectorStoreRetriever | None = None,
+        qa_chain: Callable | None = None,
+        top_k: int | None = None,
     ) -> None:
         self._retriever = retriever or VectorStoreRetriever()
         self._chain = qa_chain or build_qa_chain()
@@ -79,8 +79,8 @@ class AnswerService:
     def configure_retrieval(
         self,
         *,
-        top_k: Optional[int] = None,
-        threshold: Optional[float] = None,
+        top_k: int | None = None,
+        threshold: float | None = None,
     ) -> None:
         """Update runtime retrieval settings without exposing internal fields."""
         if top_k is not None:
@@ -91,7 +91,7 @@ class AnswerService:
         if threshold is not None:
             self._retriever.set_threshold(threshold)
 
-    def answer(self, question: str, top_k: Optional[int] = None) -> AnswerResult:
+    def answer(self, question: str, top_k: int | None = None) -> AnswerResult:
         """
         Answer *question* using retrieved context.
 
@@ -103,6 +103,30 @@ class AnswerService:
             AnswerResult with answer text, supporting chunks, and metadata.
             On error, AnswerResult.error is set and AnswerResult.answer contains
             a human-readable error message.
+        """
+        return self.answer_study(
+            question=question,
+            top_k=top_k,
+            study_mode="answer",
+            source_filter=None,
+        )
+
+    def answer_study(
+        self,
+        question: str,
+        top_k: int | None = None,
+        *,
+        study_mode: str = "answer",
+        source_filter: str | None = None,
+    ) -> AnswerResult:
+        """
+        Answer *question* using retrieved context and a requested study mode.
+
+        Args:
+            question: User's natural-language request.
+            top_k: Number of chunks to retrieve (overrides instance default).
+            study_mode: Output style, e.g. answer, explain, summary, practice.
+            source_filter: Optional filename to restrict retrieval.
         """
         question = question.strip()
         if not question:
@@ -153,7 +177,7 @@ class AnswerService:
 
         # ── 2. Retrieve ───────────────────────────────────────────────────────
         try:
-            chunks = self._retriever.retrieve(question, top_k=k)
+            chunks = self._retriever.retrieve(question, top_k=k, source_filter=source_filter)
         except (RuntimeError, ValueError) as exc:
             log.error("Retrieval failed: %s", exc)
             return AnswerResult(
@@ -168,7 +192,10 @@ class AnswerService:
 
         # ── 3. Generate ───────────────────────────────────────────────────────
         try:
-            answer = self._chain(question, chunks)
+            try:
+                answer = self._chain(question, chunks, study_mode=study_mode)
+            except TypeError:
+                answer = self._chain(question, chunks)
         except RuntimeError as exc:
             log.error("LLM generation failed: %s", exc)
             return AnswerResult(

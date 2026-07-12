@@ -1,1 +1,1 @@
-"""Algorithm RAG Assistant — source package."""
+"""StudyMate RAG Assistant — source package."""

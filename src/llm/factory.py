@@ -21,7 +21,7 @@ log = get_logger(__name__)
 
 
 @lru_cache(maxsize=1)
-def get_llm() -> "BaseChatModel":
+def get_llm() -> BaseChatModel:
     """
     Return a singleton chat model for the configured provider.
 
@@ -42,7 +42,7 @@ def get_llm() -> "BaseChatModel":
 
     if provider == "openai":
         if not settings.openai_api_key:
-            raise EnvironmentError(missing_secret_message("OPENAI_API_KEY"))
+            raise OSError(missing_secret_message("OPENAI_API_KEY"))
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
@@ -54,7 +54,7 @@ def get_llm() -> "BaseChatModel":
 
     if provider == "gemini":
         if not settings.gemini_api_key:
-            raise EnvironmentError(missing_secret_message("GEMINI_API_KEY"))
+            raise OSError(missing_secret_message("GEMINI_API_KEY"))
         try:
             from langchain_google_genai import ChatGoogleGenerativeAI
         except ImportError as exc:

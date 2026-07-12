@@ -10,10 +10,9 @@ Responsible for:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
 
-from src.vectordb.retriever import RetrievedChunk
 from src.utils.logging import get_logger
+from src.vectordb.retriever import RetrievedChunk
 
 log = get_logger(__name__)
 
@@ -44,7 +43,7 @@ class CitationService:
     PREVIEW_LENGTH = 200
 
     @classmethod
-    def build_citations(cls, chunks: List[RetrievedChunk]) -> List[Citation]:
+    def build_citations(cls, chunks: list[RetrievedChunk]) -> list[Citation]:
         """
         Convert retrieved chunks into deduplicated Citation objects.
 
@@ -83,7 +82,7 @@ class CitationService:
         return citations
 
     @classmethod
-    def format_markdown(cls, citations: List[Citation]) -> str:
+    def format_markdown(cls, citations: list[Citation]) -> str:
         """Return a markdown-formatted reference section."""
         if not citations:
             return "*No sources retrieved.*"
@@ -95,7 +94,7 @@ class CitationService:
         return "\n".join(lines)
 
     @classmethod
-    def format_inline_references(cls, citations: List[Citation]) -> str:
+    def format_inline_references(cls, citations: list[Citation]) -> str:
         """Return a compact inline reference list (e.g. for answer suffix)."""
         if not citations:
             return ""

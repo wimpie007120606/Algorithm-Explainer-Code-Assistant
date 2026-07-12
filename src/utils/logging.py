@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Optional
 
 _ROOT_CONFIGURED = False
 
@@ -42,7 +41,7 @@ def configure_logging(level: str = "INFO") -> None:
     _ROOT_CONFIGURED = True
 
 
-def get_logger(name: Optional[str] = None) -> logging.Logger:
+def get_logger(name: str | None = None) -> logging.Logger:
     """Return a logger, configuring the root logger on first call."""
     # Lazily read log level from settings to avoid circular imports
     try:

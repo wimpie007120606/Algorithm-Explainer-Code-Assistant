@@ -8,25 +8,23 @@ single `retrieve()` method that handles threshold filtering and logging.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from functools import lru_cache
-from typing import List, Optional, Union
 
 from langchain_core.documents import Document
 
 from src.config.settings import get_settings
 from src.embeddings.factory import get_embedding_model
 from src.utils.logging import get_logger
+from src.vectordb.chroma_store import ChromaVectorStore
+from src.vectordb.pinecone_store import PineconeVectorStore
 
 log = get_logger(__name__)
 
 
 # ─── type alias ───────────────────────────────────────────────────────────────
 
-from src.vectordb.chroma_store import ChromaVectorStore
-from src.vectordb.pinecone_store import PineconeVectorStore
-
-AnyVectorStore = Union[ChromaVectorStore, PineconeVectorStore]
+AnyVectorStore = ChromaVectorStore | PineconeVectorStore
 
 
 # ─── factory ──────────────────────────────────────────────────────────────────
@@ -89,9 +87,9 @@ class VectorStoreRetriever:
 
     def __init__(
         self,
-        store: Optional[AnyVectorStore] = None,
-        top_k: Optional[int] = None,
-        similarity_threshold: Optional[float] = None,
+        store: AnyVectorStore | None = None,
+        top_k: int | None = None,
+        similarity_threshold: float | None = None,
     ) -> None:
         settings = get_settings()
         self._store = store or get_vector_store()
@@ -108,9 +106,10 @@ class VectorStoreRetriever:
     def retrieve(
         self,
         query: str,
-        top_k: Optional[int] = None,
-        threshold: Optional[float] = None,
-    ) -> List[RetrievedChunk]:
+        top_k: int | None = None,
+        threshold: float | None = None,
+        source_filter: str | None = None,
+    ) -> list[RetrievedChunk]:
         """
         Retrieve the most relevant chunks for *query*.
 
@@ -119,6 +118,7 @@ class VectorStoreRetriever:
             top_k:   How many chunks to fetch (overrides instance default).
             threshold: Minimum relevance score to include (overrides instance default).
                        Set to 0.0 to disable filtering.
+            source_filter: Optional filename to restrict results to a single source.
 
         Returns:
             List of RetrievedChunk objects sorted by relevance (best first).
@@ -135,15 +135,46 @@ class VectorStoreRetriever:
             log.info("Empty retrieval query received; returning no chunks.")
             return []
 
-        log.info("Retrieving top-%d chunks for query: '%s'", k, query[:80])
+        settings = get_settings()
+        candidate_k = min(
+            max(k, k * settings.retrieval_candidate_multiplier),
+            settings.retrieval_max_candidates,
+        )
+        metadata_filter = {"filename": source_filter} if source_filter else None
+
+        log.info(
+            "Retrieving top-%d chunks from %d candidates for query: '%s'",
+            k,
+            candidate_k,
+            query[:80],
+        )
 
         try:
-            raw_results = self._store.similarity_search_with_score(query, k=k)
+            try:
+                raw_results = self._store.similarity_search_with_score(
+                    query,
+                    k=candidate_k,
+                    metadata_filter=metadata_filter,
+                )
+            except TypeError:
+                raw_results = self._store.similarity_search_with_score(query, k=candidate_k)
         except Exception as exc:
             log.error("Vector store retrieval failed: %s", exc)
             raise RuntimeError(f"Retrieval error: {exc}") from exc
 
-        chunks = [RetrievedChunk(document=doc, score=score) for doc, score in raw_results]
+        if source_filter:
+            raw_results = [
+                (doc, score)
+                for doc, score in raw_results
+                if doc.metadata.get("filename") == source_filter
+            ]
+
+        chunks = [
+            self._build_scored_chunk(doc, score, query, settings.retrieval_lexical_weight)
+            for doc, score in raw_results
+        ]
+        chunks.sort(key=lambda c: c.score, reverse=True)
+        chunks = chunks[:k]
 
         # Filter by threshold
         if thresh > 0.0:
@@ -155,6 +186,51 @@ class VectorStoreRetriever:
 
         log.info("Retrieved %d chunk(s) above threshold.", len(chunks))
         return chunks
+
+    @staticmethod
+    def _tokenize(text: str) -> set[str]:
+        tokens = re.findall(r"[A-Za-z0-9]{3,}", text.lower())
+        stop_words = {
+            "the", "and", "for", "with", "that", "this", "from", "into",
+            "show", "give", "some", "what", "when", "where", "which", "how",
+            "please", "about", "question", "questions", "answer", "answers",
+        }
+        return {token for token in tokens if token not in stop_words}
+
+    @classmethod
+    def _lexical_score(cls, query: str, doc: Document) -> float:
+        query_terms = cls._tokenize(query)
+        if not query_terms:
+            return 0.0
+
+        metadata_text = " ".join(
+            str(doc.metadata.get(key, ""))
+            for key in ("filename", "section_heading", "file_type")
+        )
+        doc_terms = cls._tokenize(f"{metadata_text} {doc.page_content}")
+        if not doc_terms:
+            return 0.0
+
+        overlap = query_terms & doc_terms
+        return len(overlap) / len(query_terms)
+
+    @classmethod
+    def _build_scored_chunk(
+        cls,
+        doc: Document,
+        vector_score: float,
+        query: str,
+        lexical_weight: float,
+    ) -> RetrievedChunk:
+        lexical_score = cls._lexical_score(query, doc)
+        combined_score = (1.0 - lexical_weight) * vector_score + lexical_weight * lexical_score
+        combined_score = max(0.0, min(1.0, combined_score))
+
+        doc.metadata["vector_score"] = vector_score
+        doc.metadata["lexical_score"] = lexical_score
+        doc.metadata["combined_score"] = combined_score
+
+        return RetrievedChunk(document=doc, score=combined_score)
 
     def set_threshold(self, threshold: float) -> None:
         """Update the similarity threshold used for filtering retrieved chunks."""

@@ -1,10 +1,10 @@
-# Architecture Notes — Algorithm RAG Assistant
+# Architecture Notes — StudyMate RAG Assistant
 
 ## Overview
 
 This system implements a **Retrieval-Augmented Generation (RAG)** pipeline for
-answering questions about algorithms and data structures using uploaded technical
-documents as the exclusive knowledge source.
+answering study questions using uploaded technical documents as the exclusive
+knowledge source.
 
 ```
 User Question

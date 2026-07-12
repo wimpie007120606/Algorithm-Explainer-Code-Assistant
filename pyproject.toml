@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.backends.legacy:build"
 
 [project]
-name = "algorithm-rag-assistant"
+name = "studymate-rag-assistant"
 version = "0.1.0"
-description = "RAG-powered algorithm explainer and code assistant"
+description = "RAG-powered study coach for grounded answers, practice, flashcards, summaries, and plans"
 requires-python = ">=3.11"
 readme = "README.md"
 

@@ -11,18 +11,16 @@ Validates:
 
 from __future__ import annotations
 
-import pytest
-
-from src.llm.prompts import (
-    SYSTEM_PROMPT,
-    NO_CONTEXT_RESPONSE,
-    CONTEXT_BLOCK_TEMPLATE,
-    format_context_blocks,
-    build_prompt_messages,
-)
-from src.vectordb.retriever import RetrievedChunk
 from langchain_core.documents import Document
 
+from src.llm.prompts import (
+    NO_CONTEXT_RESPONSE,
+    SYSTEM_PROMPT,
+    build_prompt_messages,
+    format_context_blocks,
+    normalize_study_mode,
+)
+from src.vectordb.retriever import RetrievedChunk
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -57,9 +55,11 @@ class TestSystemPrompt:
                "insufficient" in SYSTEM_PROMPT.lower(), \
                "System prompt must instruct model to declare when context is insufficient"
 
-    def test_mentions_java_code(self):
-        """The prompt should address Java code specifically."""
-        assert "java" in SYSTEM_PROMPT.lower(), "System prompt should reference Java code grounding"
+    def test_mentions_general_study_domains(self):
+        """The prompt should be subject-agnostic, not algorithm-only."""
+        lower = SYSTEM_PROMPT.lower()
+        assert "mathematics" in lower
+        assert "any subject" in lower
 
     def test_answer_structure_defined(self):
         """The prompt should specify an answer structure."""
@@ -139,6 +139,13 @@ class TestBuildPromptMessages:
         human_text = msgs[1].content
         assert context in human_text
 
+    def test_study_mode_instruction_in_human_message(self):
+        msgs = build_prompt_messages("Make cards", "context", study_mode="flashcards")
+        assert "flashcards" in msgs[1].content.lower()
+
+    def test_unknown_study_mode_falls_back_to_answer(self):
+        assert normalize_study_mode("unknown-mode") == "answer"
+
 
 # ── No-context fallback ───────────────────────────────────────────────────────
 
@@ -154,8 +161,9 @@ class TestNoContextResponse:
 
     def test_qa_chain_returns_no_context_on_empty_chunks(self):
         """QA chain must return NO_CONTEXT_RESPONSE when given no chunks."""
-        from src.llm.qa_chain import build_qa_chain
         from unittest.mock import MagicMock
+
+        from src.llm.qa_chain import build_qa_chain
 
         mock_llm = MagicMock()
         chain = build_qa_chain(llm=mock_llm)

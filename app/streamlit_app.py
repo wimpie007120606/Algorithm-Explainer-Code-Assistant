@@ -1,5 +1,5 @@
 """
-Algorithm Explainer & Code Assistant — Streamlit UI
+StudyMate Knowledge Coach — Streamlit UI
 
 Entry point:
     streamlit run app/streamlit_app.py
@@ -11,6 +11,9 @@ Architecture:
 """
 
 from __future__ import annotations
+
+# Streamlit requires page config before the rest of the app imports.
+# ruff: noqa: E402, I001
 
 import os
 import sys
@@ -25,8 +28,8 @@ import streamlit as st
 
 # ─── page config must be the very first Streamlit call ────────────────────────
 st.set_page_config(
-    page_title="Algorithm RAG Assistant",
-    page_icon="🧠",
+    page_title="StudyMate Knowledge Coach",
+    page_icon="📚",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -51,11 +54,11 @@ _bootstrap_streamlit_secrets()
 # ─── imports after page_config ────────────────────────────────────────────────
 from src.config.settings import get_settings, missing_secret_message
 from src.ingestion.pipeline import IngestionPipeline
-from src.services.answer_service import AnswerService, AnswerResult
+from src.services.answer_service import AnswerResult, AnswerService
 from src.services.citation_service import CitationService
 from src.utils.files import iter_documents
-from src.vectordb.retriever import VectorStoreRetriever
 from src.utils.logging import get_logger
+from src.vectordb.retriever import VectorStoreRetriever
 
 log = get_logger(__name__)
 
@@ -63,50 +66,156 @@ log = get_logger(__name__)
 
 _CSS = """
 <style>
+    :root {
+        --study-ink: #111827;
+        --study-muted: #667085;
+        --study-line: #d0d5dd;
+        --study-surface: #ffffff;
+        --study-soft: #f7f9fc;
+        --study-blue: #2563eb;
+        --study-teal: #0f766e;
+        --study-amber: #b45309;
+        --study-red: #b42318;
+    }
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 4rem;
+        max-width: 1180px;
+    }
+    section[data-testid="stSidebar"] {
+        border-right: 1px solid rgba(148, 163, 184, 0.22);
+    }
+    .study-hero {
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background:
+            linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(15, 118, 110, 0.10)),
+            linear-gradient(0deg, rgba(255,255,255,0.94), rgba(255,255,255,0.94));
+        border-radius: 8px;
+        padding: 1.4rem 1.5rem;
+        margin-bottom: 1rem;
+    }
+    .study-hero h1 {
+        margin: 0 0 .35rem 0;
+        font-size: 2.15rem;
+        line-height: 1.1;
+        letter-spacing: 0;
+    }
+    .study-hero p {
+        color: var(--study-muted);
+        margin: 0;
+        max-width: 780px;
+        font-size: 1rem;
+    }
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: .75rem;
+        margin: .9rem 0 1.2rem;
+    }
+    .metric-tile {
+        border: 1px solid rgba(148, 163, 184, 0.32);
+        background: var(--study-surface);
+        border-radius: 8px;
+        padding: .85rem .9rem;
+        min-height: 86px;
+    }
+    .metric-label {
+        color: var(--study-muted);
+        font-size: .76rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        margin-bottom: .25rem;
+    }
+    .metric-value {
+        color: var(--study-ink);
+        font-size: 1.55rem;
+        line-height: 1.1;
+        font-weight: 720;
+    }
+    .metric-note {
+        color: var(--study-muted);
+        font-size: .82rem;
+        margin-top: .28rem;
+    }
     .answer-card {
-        background: #f8f9fa;
-        border-left: 4px solid #4c8bf5;
+        background: var(--study-soft);
+        border-left: 4px solid var(--study-blue);
         border-radius: 6px;
         padding: 1.2rem 1.5rem;
         margin-bottom: 1rem;
     }
     .cite-card {
-        background: #ffffff;
-        border: 1px solid #e0e0e0;
+        background: var(--study-surface);
+        border: 1px solid rgba(148, 163, 184, 0.35);
         border-radius: 6px;
         padding: 0.8rem 1rem;
         margin-bottom: 0.5rem;
         font-size: 0.88rem;
     }
     .score-badge {
-        background: #e8f0fe;
-        color: #1a73e8;
+        background: #dbeafe;
+        color: #1d4ed8;
         border-radius: 4px;
         padding: 2px 8px;
         font-size: 0.78rem;
         font-weight: 600;
     }
+    .quality-badge {
+        background: #fef3c7;
+        color: #92400e;
+        border-radius: 4px;
+        padding: 2px 8px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
     .image-badge {
-        background: #fce8ff;
-        color: #7b1fa2;
+        background: #ccfbf1;
+        color: #0f766e;
         border-radius: 4px;
         padding: 2px 8px;
         font-size: 0.78rem;
         font-weight: 600;
     }
     .doc-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 4px 0;
-        border-bottom: 1px solid #f0f0f0;
+        padding: .55rem 0;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.25);
         font-size: 0.82rem;
     }
+    .doc-title {
+        display: block;
+        font-weight: 650;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+    }
+    .doc-meta {
+        color: var(--study-muted);
+        display: flex;
+        gap: .45rem;
+        flex-wrap: wrap;
+        margin-top: .18rem;
+    }
     .empty-state {
-        color: #888;
+        color: var(--study-muted);
         text-align: center;
         padding: 2rem;
         font-style: italic;
+    }
+    .study-tip {
+        border-left: 4px solid var(--study-teal);
+        background: rgba(20, 184, 166, 0.08);
+        border-radius: 6px;
+        padding: .85rem 1rem;
+        color: var(--study-ink);
+        margin: .8rem 0;
+    }
+    @media (max-width: 900px) {
+        .metric-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .study-hero h1 {
+            font-size: 1.65rem;
+        }
     }
 </style>
 """
@@ -145,21 +254,61 @@ def _get_indexed_sources() -> list[dict]:
     try:
         from src.vectordb.retriever import get_vector_store
         store = get_vector_store()
-        results = store.underlying_store.get(include=["metadatas"])
+        results = store.underlying_store.get(include=["metadatas", "documents"])
         metadatas = results.get("metadatas") or []
+        documents = results.get("documents") or []
         seen: dict[str, dict] = {}
-        for meta in metadatas:
+        for meta, content in zip(metadatas, documents):
             fname = meta.get("filename", "unknown")
             if fname not in seen:
                 seen[fname] = {
                     "filename": fname,
                     "file_type": meta.get("file_type", "?"),
                     "chunks": 0,
+                    "pages": set(),
+                    "chars": 0,
+                    "vision_chunks": 0,
+                    "low_text_chunks": 0,
                 }
             seen[fname]["chunks"] += 1
-        return sorted(seen.values(), key=lambda x: x["filename"])
+            seen[fname]["pages"].add(meta.get("page", "?"))
+            char_count = meta.get("char_count", len(content or ""))
+            seen[fname]["chars"] += int(char_count or 0)
+            if meta.get("vision_described"):
+                seen[fname]["vision_chunks"] += 1
+            if int(char_count or 0) < 80:
+                seen[fname]["low_text_chunks"] += 1
+
+        sources = []
+        for source in seen.values():
+            chunks = max(source["chunks"], 1)
+            source["pages"] = len(source["pages"])
+            source["avg_chars"] = round(source["chars"] / chunks)
+            source["needs_ocr"] = (
+                source["file_type"] == "pdf"
+                and source["low_text_chunks"] >= max(1, source["chunks"] // 2)
+            )
+            sources.append(source)
+
+        return sorted(sources, key=lambda x: x["filename"])
     except Exception:
         return []
+
+
+def _get_library_metrics() -> dict:
+    sources = _get_indexed_sources()
+    chunks = sum(s["chunks"] for s in sources)
+    pages = sum(s["pages"] for s in sources)
+    vision_sources = sum(1 for s in sources if s["vision_chunks"])
+    needs_ocr = sum(1 for s in sources if s["needs_ocr"])
+    return {
+        "sources": len(sources),
+        "chunks": chunks,
+        "pages": pages,
+        "vision_sources": vision_sources,
+        "needs_ocr": needs_ocr,
+        "source_rows": sources,
+    }
 
 
 def _render_document_library() -> None:
@@ -168,19 +317,27 @@ def _render_document_library() -> None:
         st.caption("No documents indexed yet.")
         return
 
-    _TYPE_ICON = {
+    type_icon = {
         "pdf": "📄", "text": "📝", "markdown": "📝",
         "image": "🖼️", "?": "📁",
     }
     for s in sources:
-        icon = _TYPE_ICON.get(s["file_type"], "📁")
+        icon = type_icon.get(s["file_type"], "📁")
         badge = ""
         if s["file_type"] == "image":
             badge = " <span class='image-badge'>vision</span>"
+        elif s["vision_chunks"]:
+            badge = " <span class='image-badge'>vision OCR</span>"
+        if s["needs_ocr"]:
+            badge += " <span class='quality-badge'>low text</span>"
         st.markdown(
             f"<div class='doc-row'>"
-            f"<span>{icon} {s['filename']}{badge}</span>"
-            f"<span style='color:#888'>{s['chunks']} chunks</span>"
+            f"<span class='doc-title'>{icon} {s['filename']}{badge}</span>"
+            f"<span class='doc-meta'>"
+            f"<span>{s['chunks']} chunks</span>"
+            f"<span>{s['pages']} page(s)</span>"
+            f"<span>{s['avg_chars']} avg chars</span>"
+            f"</span>"
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -191,29 +348,75 @@ def _render_document_library() -> None:
 
 def _render_sidebar() -> dict:
     settings = get_settings()
+    metrics = _get_library_metrics()
+    sources = metrics["source_rows"]
     image_upload_enabled = bool(settings.openai_api_key)
     upload_types = ["pdf", "txt", "md"]
     if image_upload_enabled:
         upload_types.extend(["png", "jpg", "jpeg", "webp", "gif", "bmp"])
 
     with st.sidebar:
-        st.title("⚙️ Settings")
+        st.title("Study Console")
         _render_startup_checks()
         st.divider()
 
+        st.subheader("Study Mode")
+        study_mode_labels = {
+            "answer": "Answer",
+            "explain": "Explain",
+            "summary": "Summarize",
+            "practice": "Practice",
+            "flashcards": "Flashcards",
+            "study_plan": "Study Plan",
+        }
+        study_mode_label = st.selectbox(
+            "Output style",
+            options=list(study_mode_labels.values()),
+            index=0,
+            help="Changes how the grounded answer is structured.",
+            label_visibility="collapsed",
+        )
+        study_mode = next(
+            key for key, label in study_mode_labels.items() if label == study_mode_label
+        )
+
+        source_options = ["All indexed sources"] + [s["filename"] for s in sources]
+        selected_source = st.selectbox(
+            "Focus source",
+            options=source_options,
+            index=0,
+            help="Restrict retrieval to one document when revising a specific paper or chapter.",
+        )
+        source_filter = None if selected_source == "All indexed sources" else selected_source
+
+        learner_goal = st.text_input(
+            "Goal",
+            placeholder="e.g. Prepare for Monday's calculus test",
+            help="Optional context used when creating plans or practice.",
+        )
+        study_minutes = st.number_input(
+            "Available minutes",
+            min_value=5,
+            max_value=360,
+            value=45,
+            step=5,
+            help="Used to frame study plans and revision pacing.",
+        )
+
+        st.divider()
         st.subheader("Retrieval")
         top_k = st.slider(
-            "Top-K chunks",
-            min_value=1, max_value=10,
-            value=settings.default_top_k,
-            help="Number of document chunks to retrieve per query.",
+            "Context chunks",
+            min_value=1, max_value=12,
+            value=min(max(settings.default_top_k, 1), 12),
+            help="Number of final chunks sent to the model after reranking.",
         )
         threshold = st.slider(
             "Similarity threshold",
             min_value=0.0, max_value=1.0,
             value=settings.similarity_threshold,
             step=0.05,
-            help="Minimum relevance score (0 = disabled).",
+            help="Minimum combined relevance score. Set to 0.0 while diagnosing missing context.",
         )
 
         st.divider()
@@ -223,16 +426,16 @@ def _render_sidebar() -> dict:
         show_prompt = st.checkbox("Show prompt preview", value=False)
 
         st.divider()
-        st.subheader("📄 Ingest Documents")
+        st.subheader("Add Material")
         if image_upload_enabled:
-            st.caption("PDFs, text, markdown, and images (PNG/JPG/WEBP)")
+            st.caption("PDFs, text, markdown, and images. Low-text PDFs can use vision fallback when PyMuPDF is installed.")
         else:
-            st.caption("PDFs, text, and markdown. Image ingestion unlocks after adding OPENAI_API_KEY.")
+            st.caption("PDFs, text, and markdown. Vision ingestion unlocks after adding OPENAI_API_KEY.")
         uploaded_files = st.file_uploader(
             "Upload files",
             type=upload_types,
             accept_multiple_files=True,
-            help="Images are described using GPT-4o vision before indexing.",
+            help="Images and scanned pages are transcribed with GPT-4o vision when available.",
             label_visibility="collapsed",
         )
         if uploaded_files:
@@ -266,9 +469,13 @@ def _render_sidebar() -> dict:
                 _handle_sample_ingestion(bundled_docs)
 
         st.divider()
-        st.subheader("📚 Document Library")
+        st.subheader("Knowledge Library")
         with st.container():
             _render_document_library()
+        if metrics["needs_ocr"]:
+            st.warning(
+                f"{metrics['needs_ocr']} source(s) look low-text. Re-ingest with OCR/vision before relying on them."
+            )
         if st.button("Refresh library", use_container_width=True):
             st.rerun()
 
@@ -278,6 +485,10 @@ def _render_sidebar() -> dict:
     return {
         "top_k": top_k,
         "threshold": threshold,
+        "study_mode": study_mode,
+        "source_filter": source_filter,
+        "learner_goal": learner_goal.strip(),
+        "study_minutes": study_minutes,
         "show_chunks": show_chunks,
         "show_debug": show_debug,
         "show_prompt": show_prompt,
@@ -292,8 +503,11 @@ def _render_sidebar_info() -> None:
             f"**Embeddings:** `{settings.embedding_model}`\n\n"
             f"**Vector DB:** `{settings.vector_db}`\n\n"
             f"**Chroma Dir:** `{settings.resolved_chroma_dir()}`\n\n"
+            f"**Candidate rerank:** {settings.retrieval_candidate_multiplier}× up to "
+            f"{settings.retrieval_max_candidates}\n\n"
             f"**Chunk size:** {settings.chunk_size} chars\n\n"
-            f"**Overlap:** {settings.chunk_overlap} chars"
+            f"**Overlap:** {settings.chunk_overlap} chars\n\n"
+            f"**PDF vision fallback:** `{settings.pdf_vision_fallback}`"
         )
 
 
@@ -319,10 +533,19 @@ def _render_startup_checks() -> None:
             "app restarts and may need to be re-ingested."
         )
 
+    if settings.openai_api_key and settings.pdf_vision_fallback:
+        import importlib.util
+
+        if importlib.util.find_spec("fitz") is None:
+            st.caption(
+                "PDF vision fallback is enabled, but PyMuPDF is not installed. "
+                "Install `PyMuPDF` before re-ingesting scanned PDFs."
+            )
+
     if not settings.openai_api_key:
         st.caption(
-            "Image ingestion requires `OPENAI_API_KEY` because diagrams are described "
-            "with GPT-4o vision."
+            "Image and scanned-page ingestion require `OPENAI_API_KEY` because visual "
+            "content is described with GPT-4o vision."
         )
 
 
@@ -360,14 +583,15 @@ def _handle_upload_ingestion(uploaded_files) -> None:
         for i, path in enumerate(paths):
             file_label = path.name
             is_image = path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+            is_pdf = path.suffix.lower() == ".pdf"
             status_box.info(
                 f"Processing {i + 1}/{n}: `{file_label}`"
                 + (" *(GPT-4o vision…)*" if is_image else "")
+                + (" *(text extraction + OCR fallback check…)*" if is_pdf else "")
             )
             progress_bar.progress((i) / n, text=f"{i}/{n} files processed")
 
             # Ingest file individually to get per-file feedback
-            from src.ingestion.pipeline import IngestionStats
             single_stats = pipeline.ingest_directory(
                 directory=tmp_dir,
                 file_paths=[path],
@@ -445,26 +669,71 @@ def _show_kb_status() -> None:
 
 
 def _render_header() -> None:
-    st.title("🧠 Algorithm RAG Assistant")
-    st.caption(
-        "Ask questions about algorithms and data structures — answers are grounded "
-        "in your uploaded documents, including images described by GPT-4o vision."
+    metrics = _get_library_metrics()
+    st.markdown(
+        """
+        <div class="study-hero">
+            <h1>StudyMate Knowledge Coach</h1>
+            <p>Turn lecture notes, question papers, textbooks, screenshots, and diagrams into grounded answers, practice, flashcards, summaries, and timed study plans.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"""
+        <div class="metric-grid">
+            <div class="metric-tile">
+                <div class="metric-label">Sources</div>
+                <div class="metric-value">{metrics['sources']}</div>
+                <div class="metric-note">indexed files</div>
+            </div>
+            <div class="metric-tile">
+                <div class="metric-label">Context</div>
+                <div class="metric-value">{metrics['chunks']}</div>
+                <div class="metric-note">searchable chunks</div>
+            </div>
+            <div class="metric-tile">
+                <div class="metric-label">Coverage</div>
+                <div class="metric-value">{metrics['pages']}</div>
+                <div class="metric-note">page references</div>
+            </div>
+            <div class="metric-tile">
+                <div class="metric-label">Health</div>
+                <div class="metric-value">{metrics['needs_ocr']}</div>
+                <div class="metric-note">low-text source(s)</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
 
-def _render_query_input(can_submit: bool) -> tuple[str, bool]:
+def _render_query_input(can_submit: bool, cfg: dict) -> tuple[str, bool]:
+    placeholders = {
+        "answer": "Ask anything grounded in your notes, e.g. What questions are in the calculus paper?",
+        "explain": "e.g. Explain integration by parts from my uploaded notes step by step.",
+        "summary": "e.g. Summarize the main examinable ideas from this chapter.",
+        "practice": "e.g. Create practice questions from the uploaded memo, with short answers.",
+        "flashcards": "e.g. Make flashcards for all definitions and formulas in this source.",
+        "study_plan": "e.g. Build a 45-minute revision plan for this material.",
+    }
+    placeholder = placeholders.get(cfg["study_mode"], placeholders["answer"])
     with st.form("query_form", clear_on_submit=False):
         question = st.text_area(
-            "Your question",
-            placeholder=(
-                "e.g. Explain how Ford-Fulkerson works.\n"
-                "e.g. Give the Java implementation for Merge Sort.\n"
-                "e.g. What is the time complexity of Dijkstra's algorithm?"
-            ),
-            height=100,
+            "Study request",
+            placeholder=placeholder,
+            height=120,
             label_visibility="collapsed",
         )
-        submitted = st.form_submit_button("Ask", type="primary", disabled=not can_submit)
+        button_label = {
+            "answer": "Ask",
+            "explain": "Teach Me",
+            "summary": "Summarize",
+            "practice": "Generate Practice",
+            "flashcards": "Make Flashcards",
+            "study_plan": "Build Plan",
+        }.get(cfg["study_mode"], "Ask")
+        submitted = st.form_submit_button(button_label, type="primary", disabled=not can_submit)
     return question.strip(), submitted
 
 
@@ -479,6 +748,16 @@ def _render_answer(result: AnswerResult, cfg: dict) -> None:
     st.markdown(result.answer)
 
     if result.chunks:
+        low_text_hits = [
+            c for c in result.chunks
+            if c.metadata.get("file_type") == "pdf" and len(c.content.strip()) < 80
+        ]
+        if low_text_hits and len(low_text_hits) == len(result.chunks):
+            st.warning(
+                "The retrieved PDF chunks are extremely short. This usually means the PDF "
+                "needs OCR or vision-based re-ingestion before the assistant can study from it."
+            )
+
         citations = CitationService.build_citations(result.chunks)
 
         if cfg["show_chunks"]:
@@ -507,6 +786,16 @@ def _render_answer(result: AnswerResult, cfg: dict) -> None:
             st.caption("Sources: " + " | ".join(f"`{fn}`" for fn in result.source_filenames))
     else:
         st.info("No relevant context was retrieved from the knowledge base for this query.")
+        st.markdown(
+            """
+            <div class="study-tip">
+                Try lowering the similarity threshold to 0.0, selecting the exact source in the sidebar,
+                or re-ingesting scanned/math-heavy PDFs with OCR or vision fallback. If a source is marked
+                low text, the vector database may only contain page labels rather than the real content.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     if cfg["show_debug"] and result.chunks:
         with st.expander("🔍 Debug: Chunk Scores", expanded=False):
@@ -515,7 +804,9 @@ def _render_answer(result: AnswerResult, cfg: dict) -> None:
                 "Source": c.metadata.get("filename", "?"),
                 "Page": c.metadata.get("page", "?"),
                 "Type": c.metadata.get("file_type", "?"),
-                "Score": round(c.score, 4),
+                "Combined": round(c.score, 4),
+                "Vector": round(c.metadata.get("vector_score", c.score), 4),
+                "Lexical": round(c.metadata.get("lexical_score", 0.0), 4),
                 "Chars": c.metadata.get("char_count", len(c.content)),
                 "ChunkID": c.metadata.get("chunk_id", "?")[:12],
                 "Preview": c.content[:120].replace("\n", " "),
@@ -524,7 +815,7 @@ def _render_answer(result: AnswerResult, cfg: dict) -> None:
 
     if cfg["show_prompt"] and result.chunks:
         with st.expander("📝 Prompt Preview", expanded=False):
-            from src.llm.prompts import format_context_blocks, SYSTEM_PROMPT
+            from src.llm.prompts import SYSTEM_PROMPT, format_context_blocks
             st.markdown("**System Prompt:**")
             st.code(SYSTEM_PROMPT, language="markdown")
             st.markdown("**Context Injected:**")
@@ -540,7 +831,7 @@ def _render_answer(result: AnswerResult, cfg: dict) -> None:
 
 def _build_markdown_export(result: AnswerResult) -> str:
     lines = [
-        f"# RAG Answer\n",
+        "# StudyMate Answer\n",
         f"**Question:** {result.question}\n",
         "---\n",
         result.answer,
@@ -588,27 +879,42 @@ def main() -> None:
     settings = get_settings()
     _render_header()
 
-    with st.expander("💡 Example queries", expanded=False):
+    with st.expander("Example study requests", expanded=False):
         for ex in [
-            "Explain how Ford-Fulkerson works.",
-            "What is the time complexity of Merge Sort vs Quick Sort?",
-            "Give the Java implementation for Dijkstra's algorithm.",
-            "How does AVL tree rotation work?",
-            "Explain the 0/1 Knapsack dynamic programming solution.",
-            "What is Kruskal's algorithm and how does Union-Find help?",
-            "Compare Bellman-Ford and Dijkstra for negative weights.",
+            "List the questions from my calculus question paper.",
+            "Explain the hardest formula in this chapter step by step.",
+            "Make 12 flashcards from the uploaded lecture notes.",
+            "Create a 45-minute study plan for this source.",
+            "Generate practice questions with short answers from this memo.",
+            "Summarize the key definitions and examples I should memorize.",
+            "What does the diagram on page 3 show?",
         ]:
             st.markdown(f"- *{ex}*")
 
-    st.markdown("#### Ask a question")
-    question, submitted = _render_query_input(settings.is_ready_for_rag())
+    st.markdown("#### What do you want to accomplish?")
+    question, submitted = _render_query_input(settings.is_ready_for_rag(), cfg)
 
     if submitted and question:
         service = _get_answer_service(top_k=cfg["top_k"])
         service.configure_retrieval(top_k=cfg["top_k"], threshold=cfg["threshold"])
 
+        question_for_model = question
+        if cfg["learner_goal"] or cfg["study_mode"] == "study_plan":
+            context_bits = [
+                f"Available study time: {cfg['study_minutes']} minutes.",
+            ]
+            if cfg["learner_goal"]:
+                context_bits.append(f"Learner goal: {cfg['learner_goal']}.")
+            question_for_model = "\n".join(context_bits + [f"Study request: {question}"])
+
         with st.spinner("Searching knowledge base and generating answer…"):
-            result = service.answer(question, top_k=cfg["top_k"])
+            result = service.answer_study(
+                question_for_model,
+                top_k=cfg["top_k"],
+                study_mode=cfg["study_mode"],
+                source_filter=cfg["source_filter"],
+            )
+            result.question = question
 
         _save_to_history(result)
         _render_answer(result, cfg)
@@ -620,7 +926,7 @@ def main() -> None:
 
     if not submitted and not st.session_state.history:
         st.markdown(
-            "<div class='empty-state'>Upload documents in the sidebar, then ask a question above.</div>",
+            "<div class='empty-state'>Upload readable material in the sidebar, choose a study mode, then ask for answers, practice, flashcards, summaries, or a plan.</div>",
             unsafe_allow_html=True,
         )
 

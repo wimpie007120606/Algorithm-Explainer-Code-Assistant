@@ -11,7 +11,6 @@ Wraps LangChain's Chroma integration with:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
 
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
@@ -34,8 +33,8 @@ class ChromaVectorStore:
     def __init__(
         self,
         embedding_model: Embeddings,
-        persist_dir: Optional[Path] = None,
-        collection_name: Optional[str] = None,
+        persist_dir: Path | None = None,
+        collection_name: str | None = None,
     ) -> None:
         settings = get_settings()
         self._embedding = embedding_model
@@ -70,7 +69,7 @@ class ChromaVectorStore:
 
     # ── public interface ───────────────────────────────────────────────────────
 
-    def add_documents(self, docs: List[Document]) -> None:
+    def add_documents(self, docs: list[Document]) -> None:
         """
         Add (upsert) a list of chunk Documents into the collection.
 
@@ -91,7 +90,8 @@ class ChromaVectorStore:
         self,
         query: str,
         k: int = 4,
-    ) -> List[tuple[Document, float]]:
+        metadata_filter: dict | None = None,
+    ) -> list[tuple[Document, float]]:
         """
         Return the top-*k* most similar chunks with their similarity scores.
 
@@ -102,7 +102,8 @@ class ChromaVectorStore:
         Returns:
             List of (Document, score) tuples sorted by relevance descending.
         """
-        results = self._store.similarity_search_with_relevance_scores(query, k=k)
+        kwargs = {"filter": metadata_filter} if metadata_filter else {}
+        results = self._store.similarity_search_with_relevance_scores(query, k=k, **kwargs)
         # LangChain returns (doc, relevance_score) where higher = more relevant
         return results
 

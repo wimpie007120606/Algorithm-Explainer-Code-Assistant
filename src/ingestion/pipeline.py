@@ -14,7 +14,6 @@ from __future__ import annotations
 import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
 
 from langchain_core.documents import Document
 
@@ -35,8 +34,8 @@ class IngestionStats:
     files_failed: int = 0
     total_pages: int = 0
     total_chunks: int = 0
-    failed_files: List[str] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
+    failed_files: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
     storage_failed: bool = False
     storage_error: str | None = None
 
@@ -80,7 +79,7 @@ class IngestionPipeline:
 
     # ── public API ────────────────────────────────────────────────────────────
 
-    def ingest_file(self, path: Path) -> List[Document]:
+    def ingest_file(self, path: Path) -> list[Document]:
         """
         Load, parse, and chunk a single file.
 
@@ -99,7 +98,7 @@ class IngestionPipeline:
         self,
         directory: Path,
         recursive: bool = True,
-        file_paths: Optional[List[Path]] = None,
+        file_paths: list[Path] | None = None,
     ) -> IngestionStats:
         """
         Ingest all supported documents from *directory* into the vector store.
@@ -120,7 +119,7 @@ class IngestionPipeline:
             log.warning("No supported documents found in '%s'.", directory)
             return stats
 
-        all_chunks: List[Document] = []
+        all_chunks: list[Document] = []
 
         for path in paths:
             stats.files_attempted += 1

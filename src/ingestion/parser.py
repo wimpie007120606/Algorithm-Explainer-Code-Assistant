@@ -2,8 +2,8 @@
 Document parser — post-processing layer between raw loaders and the chunker.
 
 Responsibilities:
-  1. Basic text normalisation specific to algorithm/CS documents
-     (e.g. preserve pseudocode indentation, detect section headings).
+  1. Basic text normalisation for study documents
+     (e.g. preserve code/math indentation, detect section headings).
   2. Attempt to infer a section heading from the first non-empty line of each
      page/document — stored in metadata["section_heading"].
   3. Flag documents that look like code-heavy pages so the chunker can
@@ -16,7 +16,6 @@ destroy structural cues that the LLM will use when composing answers.
 from __future__ import annotations
 
 import re
-from typing import List
 
 from langchain_core.documents import Document
 
@@ -30,7 +29,7 @@ _HEADING_RE = re.compile(
     re.MULTILINE,
 )
 
-# A crude heuristic: pages with lots of indented lines are likely pseudocode
+# A crude heuristic: pages with lots of indented lines are likely code or worked steps
 _PSEUDOCODE_INDENT_RATIO_THRESHOLD = 0.25
 
 
@@ -44,7 +43,7 @@ def _infer_section_heading(text: str) -> str:
 
 
 def _is_code_heavy(text: str) -> bool:
-    """Return True if the page appears to contain significant code / pseudocode."""
+    """Return True if the page appears to contain significant code or structured work."""
     lines = text.splitlines()
     if not lines:
         return False
@@ -52,7 +51,7 @@ def _is_code_heavy(text: str) -> bool:
     return (indented / len(lines)) >= _PSEUDOCODE_INDENT_RATIO_THRESHOLD
 
 
-def parse_documents(docs: List[Document]) -> List[Document]:
+def parse_documents(docs: list[Document]) -> list[Document]:
     """
     Enrich each Document's metadata with inferred structural signals.
 

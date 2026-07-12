@@ -12,13 +12,10 @@ Validates:
 
 from __future__ import annotations
 
-import textwrap
-from pathlib import Path
-
 import pytest
 from langchain_core.documents import Document
 
-from src.ingestion.loaders import load_document, load_text
+from src.ingestion.loaders import _has_substantive_text, load_document
 from src.ingestion.parser import parse_documents
 from src.ingestion.pipeline import IngestionPipeline
 
@@ -67,12 +64,21 @@ class TestTextLoader:
         assert "DFS" in content
 
 
+class TestPdfTextQuality:
+
+    def test_page_label_is_not_substantive_text(self):
+        assert _has_substantive_text("Page 1", min_chars=40) is False
+
+    def test_real_question_text_is_substantive(self):
+        text = "Question 1. Evaluate the integral of x squared from 0 to 1 and show all working."
+        assert _has_substantive_text(text, min_chars=40) is True
+
+
 class TestParser:
 
     def test_section_heading_detected(self, sample_document):
         parsed = parse_documents([sample_document])
         # The sample doc starts with "BFS and DFS Graph Traversal"
-        heading = parsed[0].metadata.get("section_heading", "")
         # May or may not detect it depending on regex — just check key exists
         assert "section_heading" in parsed[0].metadata
 

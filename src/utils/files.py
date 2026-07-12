@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import hashlib
 import shutil
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 

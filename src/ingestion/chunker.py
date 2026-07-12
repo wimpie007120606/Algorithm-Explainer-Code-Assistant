@@ -20,8 +20,6 @@ can override per-call for experimentation.
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -31,7 +29,7 @@ from src.utils.logging import get_logger
 
 log = get_logger(__name__)
 
-# Separators used for general prose (algorithm explanations, definitions, proofs)
+# Separators used for general prose (explanations, definitions, proofs, notes)
 _PROSE_SEPARATORS = [
     "\n\n",   # paragraph break
     "\n",     # line break
@@ -67,10 +65,10 @@ def _make_splitter(
 
 
 def chunk_documents(
-    docs: List[Document],
-    chunk_size: Optional[int] = None,
-    chunk_overlap: Optional[int] = None,
-) -> List[Document]:
+    docs: list[Document],
+    chunk_size: int | None = None,
+    chunk_overlap: int | None = None,
+) -> list[Document]:
     """
     Split a list of Documents into retrieval-ready chunks.
 
@@ -98,7 +96,7 @@ def chunk_documents(
     prose_splitter = _make_splitter(size, overlap, code_mode=False)
     code_splitter = _make_splitter(size, overlap, code_mode=True)
 
-    all_chunks: List[Document] = []
+    all_chunks: list[Document] = []
     chunk_index_counter = 0  # global counter across all docs
 
     for doc in docs:

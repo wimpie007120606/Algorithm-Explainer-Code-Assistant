@@ -9,7 +9,7 @@ retrieve → answer → cite flow.
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional
+from collections.abc import Callable
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
@@ -36,7 +36,7 @@ except ImportError:  # openai not installed (e.g. using Gemini only)
     _TRANSIENT_ERRORS = (OSError,)
 
 
-def build_qa_chain(llm: Optional[BaseChatModel] = None) -> Callable:
+def build_qa_chain(llm: BaseChatModel | None = None) -> Callable:
     """
     Return a callable QA chain.
 
@@ -55,11 +55,11 @@ def build_qa_chain(llm: Optional[BaseChatModel] = None) -> Callable:
         stop=stop_after_attempt(3),
         reraise=True,
     )
-    def _invoke_with_retry(messages: List[BaseMessage]) -> str:
+    def _invoke_with_retry(messages: list[BaseMessage]) -> str:
         response = model.invoke(messages)
         return response.content
 
-    def chain(question: str, chunks) -> str:
+    def chain(question: str, chunks, study_mode: str = "answer") -> str:
         """
         Generate a grounded answer for *question* from *chunks*.
 
@@ -75,12 +75,13 @@ def build_qa_chain(llm: Optional[BaseChatModel] = None) -> Callable:
             return NO_CONTEXT_RESPONSE
 
         context_str = format_context_blocks(chunks)
-        messages = build_prompt_messages(question, context_str)
+        messages = build_prompt_messages(question, context_str, study_mode=study_mode)
 
         log.info(
-            "Invoking LLM for question: '%s' with %d context chunks.",
+            "Invoking LLM for question: '%s' with %d context chunks in %s mode.",
             question[:80],
             len(chunks),
+            study_mode,
         )
 
         try:

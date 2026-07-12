@@ -25,7 +25,7 @@ log = get_logger(__name__)
 
 
 @lru_cache(maxsize=1)
-def get_embedding_model() -> "Embeddings":
+def get_embedding_model() -> Embeddings:
     """
     Return a singleton embedding model for the configured provider.
 
@@ -44,7 +44,7 @@ def get_embedding_model() -> "Embeddings":
 
     if provider == "openai":
         if not settings.openai_api_key:
-            raise EnvironmentError(missing_secret_message("OPENAI_API_KEY"))
+            raise OSError(missing_secret_message("OPENAI_API_KEY"))
         from langchain_openai import OpenAIEmbeddings
 
         return OpenAIEmbeddings(
@@ -54,7 +54,7 @@ def get_embedding_model() -> "Embeddings":
 
     if provider == "gemini":
         if not settings.gemini_api_key:
-            raise EnvironmentError(missing_secret_message("GEMINI_API_KEY"))
+            raise OSError(missing_secret_message("GEMINI_API_KEY"))
         try:
             from langchain_google_genai import GoogleGenerativeAIEmbeddings
         except ImportError as exc:

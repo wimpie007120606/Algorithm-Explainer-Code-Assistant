@@ -13,8 +13,6 @@ backends transparently via the factory in retriever.py.
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
@@ -32,18 +30,18 @@ class PineconeVectorStore:
     def __init__(
         self,
         embedding_model: Embeddings,
-        index_name: Optional[str] = None,
+        index_name: str | None = None,
     ) -> None:
         settings = get_settings()
         self._embedding = embedding_model
         self._index_name = index_name or settings.pinecone_index_name
 
         if not settings.pinecone_api_key:
-            raise EnvironmentError(missing_secret_message("PINECONE_API_KEY"))
+            raise OSError(missing_secret_message("PINECONE_API_KEY"))
 
         try:
-            from pinecone import Pinecone
             from langchain_pinecone import PineconeVectorStore as _LCPinecone
+            from pinecone import Pinecone
         except ImportError as exc:
             raise ImportError(
                 "pinecone-client and langchain-pinecone are required: "
@@ -62,7 +60,7 @@ class PineconeVectorStore:
 
     # ── public interface ───────────────────────────────────────────────────────
 
-    def add_documents(self, docs: List[Document]) -> None:
+    def add_documents(self, docs: list[Document]) -> None:
         if not docs:
             return
         ids = [doc.metadata.get("chunk_id", f"chunk_{i}") for i, doc in enumerate(docs)]
@@ -70,9 +68,13 @@ class PineconeVectorStore:
         self._store.add_documents(docs, ids=ids)
 
     def similarity_search_with_score(
-        self, query: str, k: int = 4
-    ) -> List[tuple[Document, float]]:
-        return self._store.similarity_search_with_relevance_scores(query, k=k)
+        self,
+        query: str,
+        k: int = 4,
+        metadata_filter: dict | None = None,
+    ) -> list[tuple[Document, float]]:
+        kwargs = {"filter": metadata_filter} if metadata_filter else {}
+        return self._store.similarity_search_with_relevance_scores(query, k=k, **kwargs)
 
     def as_retriever(self, k: int = 4):
         return self._store.as_retriever(search_kwargs={"k": k})

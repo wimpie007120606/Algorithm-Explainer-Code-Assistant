@@ -16,7 +16,6 @@ import pytest
 from langchain_core.documents import Document
 
 from src.ingestion.chunker import chunk_documents
-from src.ingestion.parser import parse_documents
 
 
 class TestChunking:

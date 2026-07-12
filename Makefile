@@ -2,7 +2,7 @@
 
 # Default target
 help:
-	@echo "Algorithm RAG Assistant — available commands:"
+	@echo "StudyMate RAG Assistant — available commands:"
 	@echo ""
 	@echo "  make install       Install Python dependencies"
 	@echo "  make install-dev   Install runtime + development dependencies"

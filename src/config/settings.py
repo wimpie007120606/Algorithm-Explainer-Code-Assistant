@@ -61,10 +61,18 @@ class Settings(BaseSettings):
     # ── Retrieval ─────────────────────────────────────────────────────────────
     default_top_k: int = Field(4, alias="DEFAULT_TOP_K")
     similarity_threshold: float = Field(0.3, alias="SIMILARITY_THRESHOLD")
+    retrieval_candidate_multiplier: int = Field(4, alias="RETRIEVAL_CANDIDATE_MULTIPLIER")
+    retrieval_max_candidates: int = Field(24, alias="RETRIEVAL_MAX_CANDIDATES")
+    retrieval_lexical_weight: float = Field(0.18, alias="RETRIEVAL_LEXICAL_WEIGHT")
 
     # ── Chunking ──────────────────────────────────────────────────────────────
     chunk_size: int = Field(1000, alias="CHUNK_SIZE")
     chunk_overlap: int = Field(150, alias="CHUNK_OVERLAP")
+
+    # ── PDF / Vision Fallback ────────────────────────────────────────────────
+    pdf_min_text_chars: int = Field(40, alias="PDF_MIN_TEXT_CHARS")
+    pdf_vision_fallback: bool = Field(True, alias="PDF_VISION_FALLBACK")
+    pdf_vision_dpi: int = Field(180, alias="PDF_VISION_DPI")
 
     # ── Generation ────────────────────────────────────────────────────────────
     temperature: float = Field(0.0, alias="TEMPERATURE")
@@ -85,6 +93,27 @@ class Settings(BaseSettings):
         chunk_size = data.get("chunk_size", 1000)
         if v >= chunk_size:
             raise ValueError(f"chunk_overlap ({v}) must be less than chunk_size ({chunk_size})")
+        return v
+
+    @field_validator("retrieval_candidate_multiplier", "retrieval_max_candidates", "pdf_min_text_chars")
+    @classmethod
+    def positive_int_setting(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("value must be positive")
+        return v
+
+    @field_validator("retrieval_lexical_weight")
+    @classmethod
+    def lexical_weight_in_range(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError("retrieval_lexical_weight must be between 0.0 and 1.0")
+        return v
+
+    @field_validator("pdf_vision_dpi")
+    @classmethod
+    def dpi_in_reasonable_range(cls, v: int) -> int:
+        if not 72 <= v <= 300:
+            raise ValueError("pdf_vision_dpi must be between 72 and 300")
         return v
 
     def resolved_chroma_dir(self) -> Path:
@@ -146,9 +175,9 @@ class Settings(BaseSettings):
     def validate_llm_api_key(self) -> None:
         """Raise a clear error if the active provider has no API key configured."""
         if self.llm_provider == "openai" and not self.openai_api_key:
-            raise EnvironmentError(missing_secret_message("OPENAI_API_KEY"))
+            raise OSError(missing_secret_message("OPENAI_API_KEY"))
         if self.llm_provider == "gemini" and not self.gemini_api_key:
-            raise EnvironmentError(missing_secret_message("GEMINI_API_KEY"))
+            raise OSError(missing_secret_message("GEMINI_API_KEY"))
 
 
 @lru_cache(maxsize=1)

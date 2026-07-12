@@ -14,14 +14,16 @@ class DummyRetriever:
         self._count = count
         self.threshold = None
         self.last_top_k = None
+        self.last_source_filter = None
         self.retrieve_calls = 0
 
     def count_documents(self) -> int:
         return self._count
 
-    def retrieve(self, question: str, top_k=None):
+    def retrieve(self, question: str, top_k=None, source_filter=None):
         self.retrieve_calls += 1
         self.last_top_k = top_k
+        self.last_source_filter = source_filter
         return []
 
     def set_threshold(self, threshold: float) -> None:
@@ -69,3 +71,22 @@ class TestAnswerService:
         assert "top_k must be a positive integer" in result.answer
         assert retriever.retrieve_calls == 0
         assert qa_calls == []
+
+    def test_answer_study_passes_mode_and_source_filter(self):
+        retriever = DummyRetriever()
+        calls = []
+        service = AnswerService(
+            retriever=retriever,
+            qa_chain=lambda question, chunks, study_mode="answer": calls.append(study_mode) or "ok",
+            top_k=4,
+        )
+
+        result = service.answer_study(
+            "Make flashcards",
+            study_mode="flashcards",
+            source_filter="calculus.pdf",
+        )
+
+        assert result.answer == "ok"
+        assert calls == ["flashcards"]
+        assert retriever.last_source_filter == "calculus.pdf"

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from src.config.settings import Settings, missing_secret_message
 
 
@@ -36,3 +38,13 @@ class TestSettings:
 
         missing = Settings(llm_provider="openai", openai_api_key="")
         assert missing.is_ready_for_rag() is False
+
+    def test_retrieval_rerank_defaults_are_valid(self):
+        settings = Settings()
+        assert settings.retrieval_candidate_multiplier >= 1
+        assert settings.retrieval_max_candidates >= settings.default_top_k
+        assert 0.0 <= settings.retrieval_lexical_weight <= 1.0
+
+    def test_pdf_vision_dpi_validation(self):
+        with pytest.raises(ValueError, match="pdf_vision_dpi"):
+            Settings(pdf_vision_dpi=20)
