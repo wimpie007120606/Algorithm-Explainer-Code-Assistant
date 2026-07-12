@@ -67,15 +67,22 @@ log = get_logger(__name__)
 _CSS = """
 <style>
     :root {
-        --study-ink: #111827;
-        --study-muted: #667085;
-        --study-line: #d0d5dd;
-        --study-surface: #ffffff;
-        --study-soft: #f7f9fc;
-        --study-blue: #2563eb;
-        --study-teal: #0f766e;
-        --study-amber: #b45309;
-        --study-red: #b42318;
+        --study-bg: #080a0f;
+        --study-panel: #10131b;
+        --study-panel-2: #151923;
+        --study-text: #f6f7fb;
+        --study-muted: #a8afbd;
+        --study-dim: #7d8594;
+        --study-line: #303642;
+        --study-line-soft: #232833;
+        --study-accent: #f5f5f7;
+    }
+    html,
+    body,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stHeader"] {
+        background: var(--study-bg) !important;
+        color: var(--study-text) !important;
     }
     .block-container {
         padding-top: 2rem;
@@ -83,22 +90,24 @@ _CSS = """
         max-width: 1180px;
     }
     section[data-testid="stSidebar"] {
-        border-right: 1px solid rgba(148, 163, 184, 0.22);
+        background: var(--study-panel) !important;
+        border-right: 1px solid var(--study-line-soft);
+    }
+    section[data-testid="stSidebar"] * {
+        color: var(--study-text);
     }
     .study-hero {
-        border: 1px solid rgba(148, 163, 184, 0.28);
-        background:
-            linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(15, 118, 110, 0.10)),
-            linear-gradient(0deg, rgba(255,255,255,0.94), rgba(255,255,255,0.94));
-        border-radius: 8px;
-        padding: 1.4rem 1.5rem;
-        margin-bottom: 1rem;
+        border-top: 1px solid var(--study-line);
+        border-bottom: 1px solid var(--study-line);
+        padding: 1.35rem 0 1.25rem;
+        margin-bottom: 1.1rem;
     }
     .study-hero h1 {
         margin: 0 0 .35rem 0;
         font-size: 2.15rem;
         line-height: 1.1;
         letter-spacing: 0;
+        color: var(--study-text);
     }
     .study-hero p {
         color: var(--study-muted);
@@ -109,25 +118,29 @@ _CSS = """
     .metric-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: .75rem;
+        gap: 0;
         margin: .9rem 0 1.2rem;
+        border-top: 1px solid var(--study-line-soft);
+        border-bottom: 1px solid var(--study-line-soft);
     }
     .metric-tile {
-        border: 1px solid rgba(148, 163, 184, 0.32);
-        background: var(--study-surface);
-        border-radius: 8px;
-        padding: .85rem .9rem;
-        min-height: 86px;
+        background: transparent;
+        border-right: 1px solid var(--study-line-soft);
+        padding: .9rem 1rem;
+        min-height: 82px;
+    }
+    .metric-tile:last-child {
+        border-right: 0;
     }
     .metric-label {
-        color: var(--study-muted);
+        color: var(--study-dim);
         font-size: .76rem;
         text-transform: uppercase;
         letter-spacing: .04em;
         margin-bottom: .25rem;
     }
     .metric-value {
-        color: var(--study-ink);
+        color: var(--study-text);
         font-size: 1.55rem;
         line-height: 1.1;
         font-weight: 720;
@@ -137,32 +150,45 @@ _CSS = """
         font-size: .82rem;
         margin-top: .28rem;
     }
+    h1, h2, h3, h4, h5, h6,
+    p, li, label, span, div {
+        color: inherit;
+    }
+    .stMarkdown,
+    .stMarkdown p,
+    [data-testid="stMarkdownContainer"] {
+        color: var(--study-text);
+    }
+    .stCaptionContainer,
+    [data-testid="stCaptionContainer"] {
+        color: var(--study-muted) !important;
+    }
     .answer-card {
-        background: var(--study-soft);
-        border-left: 4px solid var(--study-blue);
-        border-radius: 6px;
+        background: transparent;
+        border-left: 1px solid var(--study-line);
         padding: 1.2rem 1.5rem;
         margin-bottom: 1rem;
     }
     .cite-card {
-        background: var(--study-surface);
-        border: 1px solid rgba(148, 163, 184, 0.35);
-        border-radius: 6px;
+        background: transparent;
+        border: 1px solid var(--study-line-soft);
         padding: 0.8rem 1rem;
         margin-bottom: 0.5rem;
         font-size: 0.88rem;
     }
     .score-badge {
-        background: #dbeafe;
-        color: #1d4ed8;
+        background: transparent;
+        color: var(--study-text);
+        border: 1px solid var(--study-line);
         border-radius: 4px;
         padding: 2px 8px;
         font-size: 0.78rem;
         font-weight: 600;
     }
     .quality-badge {
-        background: #fef3c7;
-        color: #92400e;
+        background: transparent;
+        color: var(--study-muted);
+        border: 1px solid var(--study-line);
         border-radius: 4px;
         padding: 2px 8px;
         font-size: 0.72rem;
@@ -170,8 +196,9 @@ _CSS = """
         text-transform: uppercase;
     }
     .image-badge {
-        background: #ccfbf1;
-        color: #0f766e;
+        background: transparent;
+        color: var(--study-text);
+        border: 1px solid var(--study-line);
         border-radius: 4px;
         padding: 2px 8px;
         font-size: 0.78rem;
@@ -179,7 +206,7 @@ _CSS = """
     }
     .doc-row {
         padding: .55rem 0;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+        border-bottom: 1px solid var(--study-line-soft);
         font-size: 0.82rem;
     }
     .doc-title {
@@ -202,16 +229,68 @@ _CSS = """
         font-style: italic;
     }
     .study-tip {
-        border-left: 4px solid var(--study-teal);
-        background: rgba(20, 184, 166, 0.08);
-        border-radius: 6px;
+        border-left: 1px solid var(--study-line);
+        background: transparent;
         padding: .85rem 1rem;
-        color: var(--study-ink);
+        color: var(--study-muted);
         margin: .8rem 0;
+    }
+    div[data-testid="stForm"],
+    div[data-testid="stExpander"],
+    div[data-testid="stFileUploader"] {
+        background: transparent !important;
+        border-color: var(--study-line-soft) !important;
+        color: var(--study-text) !important;
+    }
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="input"] > div,
+    textarea,
+    input {
+        background: var(--study-panel-2) !important;
+        color: var(--study-text) !important;
+        border-color: var(--study-line-soft) !important;
+    }
+    textarea::placeholder,
+    input::placeholder {
+        color: var(--study-dim) !important;
+        opacity: 1 !important;
+    }
+    button,
+    .stButton button,
+    .stDownloadButton button,
+    [data-testid="stFormSubmitButton"] button {
+        background: transparent !important;
+        color: var(--study-text) !important;
+        border: 1px solid var(--study-line) !important;
+        box-shadow: none !important;
+    }
+    button:hover,
+    .stButton button:hover,
+    .stDownloadButton button:hover,
+    [data-testid="stFormSubmitButton"] button:hover {
+        border-color: var(--study-text) !important;
+        color: var(--study-text) !important;
+    }
+    div[data-testid="stAlert"] {
+        background: transparent !important;
+        border: 1px solid var(--study-line-soft) !important;
+        color: var(--study-text) !important;
+    }
+    div[data-testid="stAlert"] * {
+        color: var(--study-text) !important;
+    }
+    hr {
+        border-color: var(--study-line-soft) !important;
     }
     @media (max-width: 900px) {
         .metric-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .metric-tile:nth-child(2) {
+            border-right: 0;
+        }
+        .metric-tile:nth-child(-n+2) {
+            border-bottom: 1px solid var(--study-line-soft);
         }
         .study-hero h1 {
             font-size: 1.65rem;
