@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.documents import Document
 
-from src.ingestion.loaders import _has_substantive_text, load_document
+from src.ingestion.loaders import _clean_text, _has_substantive_text, load_document
 from src.ingestion.parser import parse_documents
 from src.ingestion.pipeline import IngestionPipeline
 
@@ -72,6 +72,28 @@ class TestPdfTextQuality:
     def test_real_question_text_is_substantive(self):
         text = "Question 1. Evaluate the integral of x squared from 0 to 1 and show all working."
         assert _has_substantive_text(text, min_chars=40) is True
+
+    def test_publisher_boilerplate_is_not_substantive(self):
+        text = (
+            "Editorial review has deemed that any suppressed content does not materially "
+            "affect the overall learning experience. Cengage Learning reserves all rights."
+        )
+        assert _has_substantive_text(text, min_chars=40) is False
+
+    def test_clean_text_removes_boilerplate_and_keeps_study_content(self):
+        raw = "\x00Derivatives measure instantaneous rate of change.\n"
+        raw += "Copyright 2021 Cengage Learning. All Rights Reserved. May not be copied.\n"
+        raw += "Use the chain rule for composite functions."
+
+        cleaned = _clean_text(raw)
+
+        assert "Derivatives measure instantaneous rate of change." in cleaned
+        assert "Use the chain rule for composite functions." in cleaned
+        assert "Copyright 2021" not in cleaned
+        assert "\x00" not in cleaned
+
+    def test_clean_text_joins_hyphenated_line_breaks(self):
+        assert "derivative" in _clean_text("deriva-\ntive")
 
 
 class TestParser:

@@ -17,6 +17,7 @@ metadata attachment.  Text cleaning and chunking happen in later stages.
 from __future__ import annotations
 
 import re
+import unicodedata
 from pathlib import Path
 
 from langchain_core.documents import Document
@@ -29,11 +30,44 @@ log = get_logger(__name__)
 
 # ─── helpers ──────────────────────────────────────────────────────────────────
 
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
+_BOILERPLATE_LINE_RE = re.compile(
+    r"("
+    r"copyright\s+\d{4}.*all\s+rights\s+reserved"
+    r"|all\s+rights\s+reserved.*may\s+not\s+be\s+copied"
+    r"|may\s+not\s+be\s+copied,\s*scanned,\s*or\s+duplicated"
+    r"|editorial\s+review\s+has\s+deemed"
+    r"|does\s+not\s+materially\s+affect\s+the\s+overall\s+learning\s+experience"
+    r"|cengage\s+learning\s+reserves"
+    r"|registered\s+trademarks?\s+of"
+    r"|cyanmagentayellowblack"
+    r"|sheet\s+number\s+\d+\s+page\s+number"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _is_boilerplate_line(line: str) -> bool:
+    """Return True for publisher/footer/legal lines that hurt retrieval."""
+    compact = re.sub(r"\s+", " ", line).strip()
+    return bool(_BOILERPLATE_LINE_RE.search(compact))
+
 
 def _clean_text(text: str) -> str:
-    """Remove control characters and normalise whitespace."""
-    # Remove null bytes and other binary noise
-    text = text.replace("\x00", "")
+    """Remove extraction noise and normalise whitespace while preserving study content."""
+    text = unicodedata.normalize("NFKC", text)
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = _CONTROL_CHAR_RE.sub("", text)
+    text = re.sub(r"(?<=\w)-\n(?=\w)", "", text)
+
+    cleaned_lines: list[str] = []
+    for line in text.splitlines():
+        line = re.sub(r"[ \t]+", " ", line).strip()
+        if line and _is_boilerplate_line(line):
+            continue
+        cleaned_lines.append(line)
+
+    text = "\n".join(cleaned_lines)
     # Collapse excessive blank lines (more than two in a row)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
@@ -46,6 +80,8 @@ def _has_substantive_text(text: str, min_chars: int) -> bool:
     if len(alpha_numeric) < min_chars:
         return False
     if re.fullmatch(r"(?i)page\s+\d+(?:\s+of\s+\d+)?", compact):
+        return False
+    if _is_boilerplate_line(compact):
         return False
     return True
 
