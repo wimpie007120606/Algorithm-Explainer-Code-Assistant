@@ -4,8 +4,9 @@ Evaluation runner.
 Executes a suite of EvalCases against the live RAG pipeline and produces a
 structured report.  Designed to be run via `python scripts/run_eval.py`.
 
-The default eval suite tests common algorithm questions.  Replace or extend
-the `DEFAULT_EVAL_CASES` list with cases relevant to your ingested documents.
+The default eval suite targets the bundled sample documents so the evaluation
+runner works out of the box. Replace or extend `DEFAULT_EVAL_CASES` with cases
+for the textbooks and notes you ingest.
 """
 
 from __future__ import annotations

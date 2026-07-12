@@ -1,337 +1,450 @@
-# StudyMate Knowledge Coach (RAG Pipeline)
+# StudyMate Knowledge Coach
 
-A production-quality **Retrieval-Augmented Generation (RAG)** system that turns uploaded study material into grounded answers, summaries, flashcards, practice questions, and timed study plans.
+**An AI-powered data science study platform built with a production-style RAG architecture.**
 
-Upload lecture notes, textbooks, question papers, memos, diagrams, screenshots, or code notes — then get responses with source citations **only when supported by your documents**.
+StudyMate turns uploaded textbooks, lecture notes, question papers, diagrams, screenshots, and code notes into a grounded learning assistant for data science students. It is designed to help a learner master the foundations behind data science: calculus, mathematical statistics, computer science, Python, SQL, algorithms, and modeling workflows.
 
----
-
-## Why This Project Matters
-
-Most "AI chat" tools answer from training data, which makes answers unverifiable and potentially wrong for domain-specific material (course notes, research papers, textbooks).
-
-This system solves that by:
-1. **Grounding every answer** in retrieved document chunks, not model hallucination
-2. **Citing the source** (filename, page number) for every claim
-3. **Explicitly refusing** to answer when the retrieved context is insufficient
-4. **Supporting real study workflows** — answer, explain, summarize, quiz, flashcard, and study-plan modes
-5. **Separating concerns cleanly** — ingestion, retrieval, generation, and UI are decoupled modules
-
-This is not a notebook tutorial. It is a portfolio-grade engineering project with a real architecture, tests, evaluation, and production-minded design.
+Unlike a generic chatbot, StudyMate answers only from the learner's uploaded material, cites source pages, refuses unsupported questions, and exposes retrieval diagnostics so the user can understand why an answer was or was not possible.
 
 ---
 
-## Architecture
+## Why This Project Stands Out
 
+This project is intentionally built like real software, not a notebook demo.
+
+It demonstrates:
+
+- **End-to-end RAG engineering**: ingestion, parsing, chunking, embeddings, vector storage, retrieval, prompt construction, answer generation, citations, evaluation, and UI.
+- **Grounded AI behavior**: the assistant is explicitly designed to avoid hallucination and to cite source material.
+- **Multi-modal document ingestion**: supports PDFs, markdown, text, images, and scanned/math-heavy pages through GPT-4o vision fallback.
+- **Data science education focus**: the interface and prompt strategy are tuned for calculus, mathematical statistics, CS, Python, SQL, and ML foundations.
+- **Production-minded structure**: modular packages, provider adapters, deterministic chunk IDs, pydantic settings, tests, linting, and deployment configuration.
+- **User-centered UX**: dark high-contrast interface, learning tracks, source focus, study modes, document health checks, debug panels, and large textbook upload support.
+
+---
+
+## Product Vision
+
+Data science students often jump into tools before they truly understand the mathematical and computational foundations. StudyMate is designed to bridge that gap.
+
+The learner can upload:
+
+- a Stewart calculus textbook
+- a mathematical statistics textbook
+- a computer science or algorithms textbook
+- a Python/data science textbook
+- lecture notes, memos, slides, diagrams, and question papers
+
+Then StudyMate can help with:
+
+- explaining difficult concepts from the uploaded sources
+- generating practice questions from the exact textbook material
+- creating flashcards for definitions, formulas, and workflows
+- building timed study plans
+- connecting calculus to optimization and gradient descent
+- connecting probability/statistics to machine learning foundations
+- connecting CS fundamentals to efficient data science implementation
+- tracing every answer back to source filenames and page numbers
+
+The result is a grounded, source-aware study environment instead of an unverified AI tutor.
+
+---
+
+## Core Capabilities
+
+| Capability | What It Does |
+|---|---|
+| Grounded Q&A | Answers from retrieved source chunks only |
+| Source Citations | Shows filename, page, and relevance score |
+| Study Modes | Answer, Explain, Summarize, Practice, Flashcards, Study Plan |
+| Learning Tracks | Data Science Core, Calculus, Math Stats, CS, Python/Data Science, General Study |
+| Multi-Textbook Retrieval | Searches across a growing source library with reranking |
+| Source Focus | Restricts retrieval to one selected document when needed |
+| Vision Fallback | Renders low-text PDF pages and transcribes them with GPT-4o vision |
+| Document Health | Flags PDFs that look like scanned/page-label-only sources |
+| Debug Panel | Shows vector, lexical, and combined retrieval scores |
+| Export | Downloads answers as Markdown |
+| Local + Cloud Ready | Runs locally or on Streamlit Community Cloud |
+
+---
+
+## What Companies Should Notice
+
+This repository demonstrates practical engineering judgment across product, backend, AI, and UX:
+
+- **Architecture discipline**: UI, services, LLM, retrieval, ingestion, config, evaluation, and utilities are separated into clear modules.
+- **Abstraction without overengineering**: vector stores, LLMs, and embeddings use adapter/factory patterns so providers can be swapped without rewriting the app.
+- **Reliability thinking**: LLM calls use retry handling for transient API failures.
+- **Data integrity**: deterministic chunk IDs prevent duplicate chunks during re-ingestion.
+- **Failure transparency**: low-text PDFs are detected instead of silently indexing useless `Page 1` chunks.
+- **Responsible AI behavior**: the prompt contract forces the model to refuse unsupported answers rather than pretend.
+- **Testing culture**: unit tests cover settings, ingestion, chunking, retrieval, prompting, and answer orchestration.
+- **Deployment awareness**: Streamlit secrets, local config, upload limits, and ephemeral cloud storage behavior are documented.
+
+---
+
+## Architecture Overview
+
+```text
+Uploaded sources
+      |
+      v
+loaders.py
+  - PDF text extraction
+  - image ingestion
+  - scanned PDF vision fallback
+      |
+      v
+parser.py
+  - section metadata
+  - code/structured-work detection
+      |
+      v
+chunker.py
+  - recursive semantic splitting
+  - deterministic chunk IDs
+      |
+      v
+embeddings/factory.py
+  - OpenAI or Gemini embeddings
+      |
+      v
+ChromaDB / Pinecone
+      |
+      v
+VectorStoreRetriever
+  - expanded candidate retrieval
+  - lexical/source-name scoring
+  - threshold filtering
+      |
+      v
+AnswerService
+  - validates knowledge base
+  - retrieves context
+  - invokes QA chain
+  - packages answer + citations
+      |
+      v
+Streamlit UI
+  - study modes
+  - source focus
+  - diagnostics
+  - downloads
 ```
-User Question
-     │
-     ▼
-┌─────────────────┐
-│  Streamlit UI   │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────────────────┐
-│       AnswerService         │
-│  retrieve → generate →      │
-│  package AnswerResult       │
-└────────┬──────────┬─────────┘
-         │          │
-         ▼          ▼
-┌──────────────┐  ┌──────────────────┐
-│ VectorStore  │  │    QA Chain      │
-│  Retriever   │  │  Prompt + LLM    │
-└──────┬───────┘  └──────────────────┘
-       │
-       ▼
-┌──────────────┐
-│  ChromaDB    │  (or Pinecone)
-│  (local)     │
-└──────────────┘
-```
 
-**Full architecture notes:** [`docs/architecture.md`](docs/architecture.md)
+Detailed architecture notes are in [docs/architecture.md](docs/architecture.md).
 
 ---
 
-## Stack
+## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
-| UI | Streamlit |
-| RAG Orchestration | LangChain |
-| LLM | OpenAI (`gpt-4o-mini` default) / Gemini |
-| Embeddings | OpenAI `text-embedding-3-small` / Gemini |
-| Vector DB | ChromaDB (local) / Pinecone (optional) |
-| PDF Parsing | pypdf + optional PyMuPDF page rendering for vision fallback |
-| Text Splitting | langchain-text-splitters |
-| Config | pydantic-settings + python-dotenv |
-| Testing | pytest |
+|---|---|
 | Language | Python 3.11+ |
+| UI | Streamlit |
+| RAG Framework | LangChain |
+| LLMs | OpenAI / Gemini |
+| Embeddings | OpenAI `text-embedding-3-small` / Gemini embeddings |
+| Vector Store | ChromaDB local persistence / optional Pinecone |
+| PDF Parsing | pypdf |
+| Vision Fallback | PyMuPDF page rendering + GPT-4o vision |
+| Chunking | langchain-text-splitters |
+| Config | pydantic-settings + python-dotenv |
+| Evaluation | Custom retrieval metrics |
+| Quality | pytest, pytest-cov, ruff |
 
 ---
 
 ## Project Structure
 
-```
-algorithm-rag-assistant/
+```text
+studymate-rag-assistant/
 ├── app/
-│   └── streamlit_app.py          # Streamlit UI — entry point
+│   └── streamlit_app.py          # High-contrast Streamlit study interface
 ├── src/
-│   ├── config/settings.py        # Centralised config (pydantic-settings)
-│   ├── ingestion/
-│   │   ├── loaders.py            # PDF / TXT / MD loaders
-│   │   ├── parser.py             # Metadata enrichment (headings, code detection)
-│   │   ├── chunker.py            # Recursive character + code-aware chunking
-│   │   └── pipeline.py           # Orchestration: load → parse → chunk → store
-│   ├── embeddings/factory.py     # Provider-agnostic embedding model factory
-│   ├── vectordb/
-│   │   ├── chroma_store.py       # ChromaDB adapter
-│   │   ├── pinecone_store.py     # Pinecone adapter (optional)
-│   │   └── retriever.py          # VectorStoreRetriever with reranking + threshold filtering
-│   ├── llm/
-│   │   ├── factory.py            # Chat model factory (OpenAI / Gemini)
-│   │   ├── prompts.py            # System prompt, context formatting
-│   │   └── qa_chain.py           # LLM invocation with retry
-│   ├── services/
-│   │   ├── answer_service.py     # End-to-end RAG orchestration
-│   │   └── citation_service.py   # Citation deduplication and formatting
-│   ├── evaluation/
-│   │   ├── metrics.py            # hit@k, precision@k, MRR, recall
-│   │   └── eval_runner.py        # Eval suite runner + report
-│   └── utils/
-│       ├── logging.py            # Structured logging setup
-│       ├── files.py              # File system helpers
-│       └── ids.py                # Deterministic chunk ID generation
+│   ├── config/                   # Typed environment/settings layer
+│   ├── embeddings/               # Provider-agnostic embedding factory
+│   ├── evaluation/               # Retrieval metrics and eval runner
+│   ├── ingestion/                # Load, parse, chunk, and store documents
+│   ├── llm/                      # Prompt contract and model invocation
+│   ├── services/                 # RAG orchestration and citation services
+│   ├── utils/                    # Logging, IDs, file helpers
+│   └── vectordb/                 # Chroma/Pinecone adapters and retriever
 ├── data/
-│   ├── raw/                      # Drop your PDFs / TXT / MD files here
-│   ├── processed/                # Intermediate processing output
-│   └── chroma_db/                # ChromaDB persistence (auto-created)
-├── tests/
-│   ├── conftest.py               # Shared fixtures
-│   ├── test_chunking.py
-│   ├── test_ingestion.py
-│   ├── test_prompting.py
-│   └── test_retrieval.py
+│   ├── raw/                      # Optional local source documents
+│   ├── processed/                # Processing output
+│   └── chroma_db/                # Local vector database persistence
+├── docs/
+│   └── architecture.md
 ├── scripts/
-│   ├── ingest_docs.py            # CLI ingestion tool
-│   ├── rebuild_index.py          # Wipe + rebuild vector index
-│   └── run_eval.py               # Run evaluation suite
-├── docs/architecture.md
+│   ├── ingest_docs.py
+│   ├── rebuild_index.py
+│   └── run_eval.py
+├── tests/
+├── .streamlit/
+│   ├── config.toml               # Dark theme and large upload limit
+│   └── secrets.toml.example
 ├── .env.example
 ├── requirements.txt
+├── requirements-dev.txt
+├── pyproject.toml
 └── Makefile
+```
+
+---
+
+## Study Modes
+
+StudyMate supports multiple task modes so it behaves less like a plain chatbot and more like a learning system.
+
+| Mode | Example |
+|---|---|
+| Answer | "What does the textbook say about Bayes' theorem?" |
+| Explain | "Teach me maximum likelihood step by step." |
+| Summarize | "Summarize the probability ideas I need before ML." |
+| Practice | "Create mixed calculus and statistics practice questions." |
+| Flashcards | "Make flashcards for distributions and derivatives." |
+| Study Plan | "Build a 2-hour plan for gradient descent foundations." |
+
+---
+
+## Learning Tracks
+
+The UI includes learning tracks that shape the assistant's output while keeping the answer grounded in retrieved context.
+
+- **Data Science Core**: connects calculus, math stats, CS, Python, SQL, and ML foundations when sources support it.
+- **Calculus**: emphasizes definitions, intuition, worked examples, and practice.
+- **Math Stats**: emphasizes probability, inference, estimators, distributions, and statistical reasoning.
+- **Computer Science**: emphasizes algorithms, data structures, complexity, and implementation ideas.
+- **Python / Data Science**: emphasizes Python, NumPy, pandas, analysis workflows, and modeling.
+- **General Study**: keeps the response focused on the selected uploaded material.
+
+---
+
+## Retrieval Strategy
+
+The retriever does more than a basic top-k vector search.
+
+1. It embeds the user query.
+2. It fetches an expanded candidate set from the vector database.
+3. It computes a lexical/source-name overlap score.
+4. It combines vector relevance with lexical relevance.
+5. It filters by the user-configurable similarity threshold.
+6. It returns the final chunks to the LLM with metadata and scores.
+
+This makes broad requests such as "make mixed data science practice questions" more likely to pull from the right subject areas in a multi-textbook library.
+
+---
+
+## Scanned PDF and Textbook Handling
+
+Text-layer PDFs are best because they can be extracted quickly and cheaply.
+
+For scanned or math-heavy PDFs, StudyMate includes a fallback path:
+
+1. pypdf tries to extract page text.
+2. Pages with too little substantive text are detected.
+3. PyMuPDF renders those pages to images.
+4. GPT-4o vision transcribes and describes the page.
+5. The generated text is chunked and embedded.
+
+This prevents a common RAG failure where a PDF "ingests successfully" but the vector store only contains useless chunks like:
+
+```text
+Page 1
+Page 2
+Page 3
 ```
 
 ---
 
 ## Setup
 
-### 1. Clone and create a virtual environment
-
 ```bash
 git clone <your-repo-url>
-cd algorithm-rag-assistant
+cd studymate-rag-assistant
 
 python -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
-```
+source .venv/bin/activate
 
-### 2. Install dependencies
-
-```bash
 pip install -r requirements-dev.txt
-```
-
-If you only want the runtime dependencies used by Streamlit Community Cloud, install:
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Configure environment variables
-
-```bash
 cp .env.example .env
-# Edit .env and add your API keys
 ```
 
-**Minimum required in `.env`:**
+Add your API key to `.env`:
+
 ```env
-OPENAI_API_KEY=sk-...
 LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
 CHAT_MODEL=gpt-4o-mini
 EMBEDDING_MODEL=text-embedding-3-small
+VECTOR_DB=chroma
 ```
 
-All other settings have sensible defaults. See `.env.example` for the full list.
-For Streamlit Community Cloud, put the same keys into the app Secrets editor instead of using `.env`.
+Run the app:
+
+```bash
+make run
+```
+
+Open:
+
+```text
+http://127.0.0.1:8501
+```
 
 ---
 
 ## Ingesting Documents
 
-Place your PDF, TXT, or MD files in `data/raw/`, then run:
+You can upload documents directly in the sidebar, or place files in `data/raw/` and run:
 
 ```bash
-python scripts/ingest_docs.py
+make ingest
 ```
 
-**Options:**
+Useful commands:
+
 ```bash
-python scripts/ingest_docs.py --dir /path/to/docs   # Custom directory
-python scripts/ingest_docs.py --dry-run              # Parse only, don't store
-python scripts/ingest_docs.py --reset                # Wipe and re-ingest
+python scripts/ingest_docs.py --dir /path/to/docs
+python scripts/ingest_docs.py --dry-run
+python scripts/ingest_docs.py --reset
+make rebuild-index
 ```
 
-You can also upload files directly from the Streamlit UI sidebar.
+For large textbooks:
+
+- Prefer text-layer PDFs.
+- Upload one or two books first, verify retrieval, then add more.
+- Increase context chunks in the sidebar for cross-book questions.
+- Use source focus when studying one textbook chapter or paper.
+- Do not commit copyrighted textbooks to Git.
 
 ---
 
-## Running the App
+## Example Data Science Study Prompts
 
-```bash
-streamlit run app/streamlit_app.py
+```text
+Teach me how derivatives, optimization, and gradient descent connect.
 ```
 
-Open `http://localhost:8501` in your browser.
-
----
-
-## Running Tests
-
-```bash
-pytest                          # All tests
-pytest tests/test_chunking.py   # Specific test file
-pytest -v --tb=short            # Verbose with short tracebacks
-pytest --cov=src                # With coverage report
+```text
+Create mixed practice questions from calculus, math stats, CS, and Python data science.
 ```
 
-These commands assume you installed `requirements-dev.txt`.
-
----
-
-## Running Evaluation
-
-```bash
-python scripts/run_eval.py
-python scripts/run_eval.py --dry-run            # Retrieval only (no LLM cost)
-python scripts/run_eval.py --top-k 6
-python scripts/run_eval.py --output eval.json   # Save report to file
+```text
+Explain maximum likelihood using only my uploaded statistics textbook.
 ```
 
----
-
-## Rebuilding the Index
-
-When you change `CHUNK_SIZE`, `CHUNK_OVERLAP`, or `EMBEDDING_MODEL`:
-
-```bash
-python scripts/rebuild_index.py        # Prompts for confirmation
-python scripts/rebuild_index.py --yes  # Skip confirmation
+```text
+Build a 2-hour study plan for becoming strong at data science foundations.
 ```
 
----
+```text
+Make flashcards for distributions, integrals, algorithms, and pandas workflows.
+```
 
-## Example Queries
-
-Once documents are ingested:
-
-- *"Explain how Ford-Fulkerson works."*
-- *"List the questions from my calculus question paper."*
-- *"Make flashcards for the definitions in this chapter."*
-- *"Create a 45-minute study plan for this uploaded memo."*
-- *"Generate practice questions with short answers from these lecture notes."*
-- *"Explain the diagram on page 3 using only the uploaded source."*
+```text
+Compare the textbook explanations of variance, covariance, and correlation.
+```
 
 ---
 
 ## Configuration Reference
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+|---|---:|---|
 | `LLM_PROVIDER` | `openai` | `openai` or `gemini` |
-| `CHAT_MODEL` | `gpt-4o-mini` | Chat model name |
+| `OPENAI_API_KEY` | empty | Required for OpenAI LLMs, embeddings, and vision fallback |
+| `GEMINI_API_KEY` | empty | Required when using Gemini |
+| `CHAT_MODEL` | `gpt-4o-mini` | Chat model |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model |
 | `VECTOR_DB` | `chroma` | `chroma` or `pinecone` |
+| `CHROMA_PERSIST_DIR` | `./data/chroma_db` | Local Chroma persistence path |
+| `DEFAULT_TOP_K` | `4` | Default context chunks |
+| `SIMILARITY_THRESHOLD` | `0.3` | Minimum relevance score; `0.0` disables filtering |
+| `RETRIEVAL_CANDIDATE_MULTIPLIER` | `4` | Candidate expansion multiplier before reranking |
+| `RETRIEVAL_MAX_CANDIDATES` | `48` | Maximum expanded candidates |
+| `RETRIEVAL_LEXICAL_WEIGHT` | `0.18` | Keyword/source-name relevance weight |
 | `CHUNK_SIZE` | `1000` | Characters per chunk |
-| `CHUNK_OVERLAP` | `150` | Overlap between chunks |
-| `DEFAULT_TOP_K` | `4` | Chunks retrieved per query |
-| `SIMILARITY_THRESHOLD` | `0.3` | Min relevance score (0 = off) |
-| `RETRIEVAL_CANDIDATE_MULTIPLIER` | `4` | Candidate expansion before reranking |
-| `RETRIEVAL_MAX_CANDIDATES` | `24` | Upper bound for expanded retrieval candidates |
-| `RETRIEVAL_LEXICAL_WEIGHT` | `0.18` | Keyword/source-name boost mixed into vector relevance |
-| `PDF_MIN_TEXT_CHARS` | `40` | Minimum useful text per PDF page before fallback/skip |
-| `PDF_VISION_FALLBACK` | `true` | Render low-text PDF pages and transcribe with GPT-4o vision |
-| `PDF_VISION_DPI` | `180` | Render resolution for PDF vision fallback |
-| `TEMPERATURE` | `0.0` | LLM temperature (0 = deterministic) |
+| `CHUNK_OVERLAP` | `150` | Chunk overlap |
+| `PDF_MIN_TEXT_CHARS` | `40` | Minimum useful text before fallback/skip |
+| `PDF_VISION_FALLBACK` | `true` | Use vision fallback for low-text PDF pages |
+| `PDF_VISION_DPI` | `180` | PDF rendering DPI for vision fallback |
+| `TEMPERATURE` | `0.0` | Deterministic answer generation |
+| `MAX_TOKENS` | `2048` | Maximum answer tokens |
 
 ---
 
-## Strict Grounding Behavior
+## Validation
 
-The assistant is designed to **refuse** to answer when the retrieved context is insufficient:
-
-> *"The provided documents do not contain enough information to answer this question."*
-
-### Streamlit Community Cloud Deployment
-
-1. Repo prerequisites
-
-- Push this repository to GitHub.
-- Make sure the branch you deploy contains [app/streamlit_app.py](app/streamlit_app.py), [requirements.txt](requirements.txt), and [.streamlit/secrets.toml.example](.streamlit/secrets.toml.example).
-- Use `requirements.txt` for deployment. It contains only runtime dependencies.
-
-2. Main entrypoint path
-
-- Select `app/streamlit_app.py` in the Streamlit dashboard.
-- This is the correct entrypoint because it is the existing Streamlit UI and already bootstraps the RAG services.
-
-3. Required secrets names
-
-- Required for the default OpenAI path:
-  - `OPENAI_API_KEY`
-- Required only if you switch providers:
-  - `GEMINI_API_KEY`
-- Required only if you switch vector stores:
-  - `PINECONE_API_KEY`
-  - `PINECONE_INDEX_NAME`
-  - `PINECONE_ENVIRONMENT`
-- Common optional config values you can also place in Streamlit secrets:
-  - `LLM_PROVIDER`
-  - `CHAT_MODEL`
-  - `EMBEDDING_MODEL`
-  - `VECTOR_DB`
-  - `DEFAULT_TOP_K`
-  - `SIMILARITY_THRESHOLD`
-  - `RETRIEVAL_CANDIDATE_MULTIPLIER`
-  - `RETRIEVAL_MAX_CANDIDATES`
-  - `RETRIEVAL_LEXICAL_WEIGHT`
-  - `PDF_VISION_FALLBACK`
-  - `CHUNK_SIZE`
-  - `CHUNK_OVERLAP`
-
-4. How to push to GitHub
+The project has automated checks for core behavior:
 
 ```bash
-git add .
-git commit -m "Prepare Streamlit Community Cloud deployment"
-git push origin <your-branch>
+make lint
+make test
 ```
 
-5. How to create the app in the Streamlit dashboard
+Current validated test coverage areas:
 
-- Go to Streamlit Community Cloud.
-- Click `Create app`.
-- Choose your GitHub repository.
-- Choose the branch you pushed.
-- Set the main file path to `app/streamlit_app.py`.
-- Deploy.
+- settings validation
+- PDF/text/markdown ingestion
+- low-text PDF detection
+- document chunking
+- prompt construction
+- no-context fallback behavior
+- answer service orchestration
+- retrieval thresholding, source filtering, reranking metadata
+- vector store factory behavior
 
-6. What to put in secrets
+Recent validation result:
 
-Example minimal secrets for the default OpenAI deployment:
+```text
+89 passed
+Ruff: all checks passed
+Streamlit AppTest: exceptions 0
+```
+
+---
+
+## Evaluation
+
+Run retrieval-focused evaluation:
+
+```bash
+make eval
+```
+
+Run full evaluation with LLM answers:
+
+```bash
+make eval-full
+```
+
+The evaluation module computes:
+
+- hit@k
+- precision@k
+- reciprocal rank
+- context recall
+- average retrieval score
+- keyword coverage
+
+---
+
+## Deployment Notes
+
+For Streamlit Community Cloud:
+
+1. Push this repository to GitHub.
+2. Create a Streamlit app from the repository.
+3. Set the main file path to:
+
+```text
+app/streamlit_app.py
+```
+
+4. Add secrets in Streamlit's secrets editor:
 
 ```toml
 LLM_PROVIDER = "openai"
@@ -341,89 +454,85 @@ VECTOR_DB = "chroma"
 OPENAI_API_KEY = "sk-..."
 ```
 
-If you want Gemini instead:
+The app bridges Streamlit secrets into environment variables at startup.
 
-```toml
-LLM_PROVIDER = "gemini"
-CHAT_MODEL = "gemini-1.5-flash"
-EMBEDDING_MODEL = "models/embedding-001"
-VECTOR_DB = "chroma"
-GEMINI_API_KEY = "..."
-```
+Important cloud caveat:
 
-7. Common failure causes
-
-- Missing `OPENAI_API_KEY` or `GEMINI_API_KEY`.
-- Setting `VECTOR_DB = "pinecone"` without also adding Pinecone secrets.
-- Expecting local Chroma data to persist across Streamlit Community Cloud restarts.
-- Forgetting that image/scanned-page ingestion requires `OPENAI_API_KEY` even if the main chat provider is Gemini.
-- Expecting scanned PDFs to work without `PyMuPDF` installed for PDF page rendering.
-
-8. How to test locally before deploy
-
-```bash
-pip install -r requirements-dev.txt
-cp .env.example .env
-streamlit run app/streamlit_app.py
-pytest -q
-```
-
-Deployment notes:
-
-- Streamlit secrets are automatically bridged into environment variables by the app at startup.
-- On Streamlit Community Cloud, the default Chroma storage path moves to `/tmp/algorithm_rag_assistant/chroma_db`.
-- That storage is ephemeral. Uploaded or sample-ingested documents can disappear after app restarts and may need to be re-ingested.
-- The repo includes bundled sample markdown docs under `data/raw/`, and the app exposes a `Load bundled sample docs` button so a fresh cloud deploy is usable without committing a vector database.
-
-It will not:
-- Invent unsupported facts, formulas, definitions, proofs, or code
-- Make up answers to missing exam questions
-- Pretend certainty when evidence is weak
-- Treat page labels like `Page 1` as useful study content
-
-This behavior is enforced by the system prompt in `src/llm/prompts.py`.
+- Local Chroma storage on Streamlit Community Cloud is ephemeral.
+- Uploaded documents may need to be re-ingested after app restarts.
+- Pinecone can be enabled for persistent hosted vector storage.
 
 ---
 
-## Limitations
+## Responsible AI and Limitations
 
-- **OCR/vision fallback has prerequisites:** Scanned or image-heavy PDFs need `OPENAI_API_KEY` and `PyMuPDF`. Without those, low-text pages are skipped with a clear ingestion error.
-- **No conversation memory:** Each query is answered independently from fresh context — the session history panel is display-only and is not fed back into the RAG pipeline.
-- **Embedding cost:** Each ingestion call generates embeddings via the API. Large document sets cost money.
-- **Chunking is approximate:** Very short documents may produce only one chunk; very long code blocks may be split at non-ideal boundaries.
-- **Evaluation suite is generic:** Replace the default `EvalCase` list with document-specific cases for meaningful metrics.
+StudyMate is intentionally strict:
 
----
+- It should not invent facts, formulas, proofs, code, or textbook claims.
+- It should refuse when retrieved context is insufficient.
+- It should cite the source material used.
+- It should not treat page labels as meaningful textbook content.
 
-## Future Improvements
+Known limitations:
 
-- [x] Lightweight reranking with vector + lexical/source-name signals
-- [x] Optional GPT-4o vision fallback for low-text PDF pages
-- [ ] Streaming LLM responses in the Streamlit UI
-- [ ] Multi-turn conversation with context history
-- [ ] Cross-encoder reranking for larger document sets
-- [ ] RAGAS integration for automatic faithfulness evaluation
-- [ ] Docker compose for one-command deployment
-- [ ] Pinecone auto-provisioning script
+- Large scanned textbooks can be slow and expensive to process through vision fallback.
+- The app does not yet include multi-turn memory in retrieval.
+- Retrieval quality depends on document extraction quality and chunking.
+- Cloud-local Chroma persistence is temporary unless a hosted vector database is used.
+- A copyrighted textbook should not be committed into the repository.
 
 ---
 
-## Screenshots
+## Roadmap
 
-*Add screenshots here after running the app.*
+Completed:
+
+- [x] Modular RAG pipeline
+- [x] Streamlit study interface
+- [x] Study modes
+- [x] Learning tracks
+- [x] Source citations
+- [x] Chroma vector persistence
+- [x] Pinecone adapter
+- [x] OpenAI and Gemini provider factories
+- [x] Low-text PDF detection
+- [x] GPT-4o vision fallback
+- [x] Lightweight vector + lexical reranking
+- [x] Retrieval evaluation module
+- [x] Dark high-contrast data science UI
+
+Planned:
+
+- [ ] Streaming token responses
+- [ ] Multi-turn study memory
+- [ ] Cross-encoder reranking
+- [ ] Per-chapter textbook navigation
+- [ ] Assignment-style practice generator
+- [ ] Learning progress dashboard
+- [ ] Persistent hosted vector database setup script
+- [ ] Docker Compose deployment
+- [ ] RAGAS or LLM-as-judge evaluation suite
 
 ---
 
-## Resume-Ready Bullet Points
+## Portfolio Talking Points
 
-> Copy and adapt these for your resume or portfolio write-up:
+Use these as interview/resume talking points:
 
-- **Built a production-grade study RAG system** in Python (LangChain, ChromaDB, OpenAI) that turns uploaded course material into grounded answers, summaries, flashcards, practice questions, and study plans with source citation.
-- **Designed a modular ingestion pipeline** (PDF/TXT/MD/image → parse → chunk → embed → index) with deterministic chunk IDs, low-text PDF detection, and optional GPT-4o vision fallback for scanned/math-heavy pages.
-- **Implemented a strict prompt engineering framework** that enforces citation grounding, refuses hallucinated answers, and adapts responses to answer, explain, summary, practice, flashcard, and study-plan modes.
-- **Built provider-agnostic adapter layers** for LLM (OpenAI/Gemini), embeddings, and vector store (ChromaDB/Pinecone) enabling zero-code-change backend swaps.
-- **Wrote a lightweight retrieval evaluation module** computing hit@k, precision@k, MRR, and context recall to validate retrieval quality without external evaluation infrastructure.
-- **Delivered a polished Streamlit UI** with study-mode controls, source focus, document health diagnostics, real-time upload, citation display, debug panels, and answer export.
+- Built a production-style RAG application that transforms uploaded academic material into a grounded AI study platform for data science foundations.
+- Designed a modular ingestion pipeline for PDFs, markdown, text, images, and scanned textbook pages using pypdf, PyMuPDF, GPT-4o vision, LangChain, and ChromaDB.
+- Implemented strict source-grounded prompting so the assistant refuses unsupported answers and cites source filenames/pages.
+- Built a hybrid retrieval layer that combines vector similarity with lexical/source-name scoring and threshold filtering.
+- Added deterministic chunk IDs to make re-ingestion idempotent and avoid duplicate vector records.
+- Created provider-agnostic factories for OpenAI/Gemini chat models and embeddings.
+- Developed a high-contrast Streamlit UX with learning tracks, study modes, source focus, document health diagnostics, and debug retrieval scoring.
+- Wrote tests across ingestion, chunking, retrieval, prompting, settings, and orchestration to validate the system end to end.
+
+---
+
+## Suggested Project Summary
+
+> StudyMate is a RAG-powered data science study platform that lets students upload textbooks and course material, then receive grounded explanations, practice questions, flashcards, summaries, and study plans with source citations. I built the full pipeline across ingestion, chunking, embeddings, vector search, reranking, prompt design, answer orchestration, evaluation, and Streamlit UX, including scanned-PDF vision fallback and strict no-hallucination behavior.
 
 ---
 

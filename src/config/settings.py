@@ -51,7 +51,7 @@ class Settings(BaseSettings):
 
     # Pinecone (optional)
     pinecone_api_key: str = Field("", alias="PINECONE_API_KEY")
-    pinecone_index_name: str = Field("algorithm-rag", alias="PINECONE_INDEX_NAME")
+    pinecone_index_name: str = Field("studymate-rag", alias="PINECONE_INDEX_NAME")
     pinecone_environment: str = Field("", alias="PINECONE_ENVIRONMENT")
 
     # ── Data Paths ────────────────────────────────────────────────────────────

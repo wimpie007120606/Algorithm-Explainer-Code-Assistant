@@ -36,6 +36,7 @@ htmlcov/
 data/raw/
 data/processed/
 data/chroma_db/
+Textbooks/
 
 # Keep directory structure
 !data/raw/.gitkeep
