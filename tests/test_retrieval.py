@@ -182,6 +182,43 @@ class TestVectorStoreRetriever:
         retriever = VectorStoreRetriever(store=store, top_k=4, similarity_threshold=0.0)
         assert retriever.count_documents() == -1
 
+    def test_count_documents_reconnects_owned_store_once(self):
+        stale_store = MagicMock()
+        stale_store.count.side_effect = Exception("collection does not exist")
+        healthy_store = MagicMock()
+        healthy_store.count.return_value = 12
+
+        with patch(
+            "src.vectordb.retriever.get_vector_store",
+            side_effect=[stale_store, healthy_store],
+        ):
+            retriever = VectorStoreRetriever(top_k=4, similarity_threshold=0.0)
+
+            assert retriever.count_documents() == 12
+            assert stale_store.count.call_count == 1
+            assert healthy_store.count.call_count == 1
+
+    def test_retrieve_reconnects_owned_store_once(self):
+        stale_store = MagicMock()
+        stale_store.similarity_search_with_score.side_effect = Exception("collection does not exist")
+        healthy_store = MagicMock()
+        healthy_store.similarity_search_with_score.return_value = [
+            (_make_doc("DFS uses a stack for graph traversal.", filename="algorithms.pdf"), 0.9),
+        ]
+
+        with patch(
+            "src.vectordb.retriever.get_vector_store",
+            side_effect=[stale_store, healthy_store],
+        ):
+            retriever = VectorStoreRetriever(top_k=1, similarity_threshold=0.0)
+
+            chunks = retriever.retrieve("Explain DFS", top_k=1)
+
+            assert len(chunks) == 1
+            assert chunks[0].metadata["filename"] == "algorithms.pdf"
+            assert stale_store.similarity_search_with_score.call_count == 1
+            assert healthy_store.similarity_search_with_score.call_count == 1
+
     def test_set_threshold_updates_filtering(self):
         """set_threshold() should be reflected in subsequent retrieve() calls."""
         raw = [

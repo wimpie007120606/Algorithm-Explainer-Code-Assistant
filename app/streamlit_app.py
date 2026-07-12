@@ -1186,6 +1186,21 @@ def main() -> None:
                 study_mode=cfg["study_mode"],
                 source_filter=cfg["source_filter"],
             )
+            error_text = f"{result.error or ''} {result.answer}".lower()
+            stale_vector_store = (
+                "vector store unavailable" in error_text
+                or ("collection" in error_text and "does not exist" in error_text)
+            )
+            if stale_vector_store:
+                st.cache_resource.clear()
+                service = _get_answer_service(top_k=cfg["top_k"])
+                service.configure_retrieval(top_k=cfg["top_k"], threshold=cfg["threshold"])
+                result = service.answer_study(
+                    question_for_model,
+                    top_k=cfg["top_k"],
+                    study_mode=cfg["study_mode"],
+                    source_filter=cfg["source_filter"],
+                )
             result.question = question
 
         _save_to_history(result)

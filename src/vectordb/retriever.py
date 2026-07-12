@@ -92,6 +92,7 @@ class VectorStoreRetriever:
         similarity_threshold: float | None = None,
     ) -> None:
         settings = get_settings()
+        self._owns_store = store is None
         self._store = store or get_vector_store()
         self._top_k = top_k if top_k is not None else settings.default_top_k
         self._threshold = (
@@ -150,17 +151,27 @@ class VectorStoreRetriever:
         )
 
         try:
+            raw_results = self._similarity_search(
+                query,
+                k=candidate_k,
+                metadata_filter=metadata_filter,
+            )
+        except Exception as exc:
+            if not self._owns_store:
+                log.error("Vector store retrieval failed: %s", exc)
+                raise RuntimeError(f"Retrieval error: {exc}") from exc
+
+            log.warning("Vector store retrieval failed; reconnecting once: %s", exc)
             try:
-                raw_results = self._store.similarity_search_with_score(
+                self._refresh_store()
+                raw_results = self._similarity_search(
                     query,
                     k=candidate_k,
                     metadata_filter=metadata_filter,
                 )
-            except TypeError:
-                raw_results = self._store.similarity_search_with_score(query, k=candidate_k)
-        except Exception as exc:
-            log.error("Vector store retrieval failed: %s", exc)
-            raise RuntimeError(f"Retrieval error: {exc}") from exc
+            except Exception as retry_exc:
+                log.error("Vector store retrieval failed after reconnect: %s", retry_exc)
+                raise RuntimeError(f"Retrieval error: {retry_exc}") from retry_exc
 
         if source_filter:
             raw_results = [
@@ -186,6 +197,27 @@ class VectorStoreRetriever:
 
         log.info("Retrieved %d chunk(s) above threshold.", len(chunks))
         return chunks
+
+    def _similarity_search(
+        self,
+        query: str,
+        *,
+        k: int,
+        metadata_filter: dict | None,
+    ) -> list[tuple[Document, float]]:
+        """Run a vector search while preserving compatibility with store adapters."""
+        try:
+            return self._store.similarity_search_with_score(
+                query,
+                k=k,
+                metadata_filter=metadata_filter,
+            )
+        except TypeError:
+            return self._store.similarity_search_with_score(query, k=k)
+
+    def _refresh_store(self) -> None:
+        """Reconnect to the configured vector store after a stale-client failure."""
+        self._store = get_vector_store()
 
     @staticmethod
     def _tokenize(text: str) -> set[str]:
@@ -242,6 +274,14 @@ class VectorStoreRetriever:
         try:
             return self._store.count()
         except Exception as exc:
+            if self._owns_store:
+                log.warning("count_documents failed; reconnecting once: %s", exc)
+                try:
+                    self._refresh_store()
+                    return self._store.count()
+                except Exception as retry_exc:
+                    log.error("count_documents failed after reconnect: %s", retry_exc)
+                    return -1
             log.error("count_documents failed: %s", exc)
             return -1
 
