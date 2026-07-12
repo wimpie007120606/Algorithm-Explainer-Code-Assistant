@@ -32,14 +32,16 @@ htmlcov/
 # Linting
 .ruff_cache/
 
-# Data (raw docs and DB are local-only)
-data/raw/
-data/processed/
-data/chroma_db/
+# Data generated at runtime stays local-only. Curated sample docs are tracked
+# so the public Streamlit app has demo material without committing textbooks.
+data/raw/*
+data/processed/*
+data/chroma_db/*
 Textbooks/
 
-# Keep directory structure
+# Keep directory structure and safe bundled demo documents
 !data/raw/.gitkeep
+!data/raw/sample_*.md
 !data/processed/.gitkeep
 !data/chroma_db/.gitkeep
 
